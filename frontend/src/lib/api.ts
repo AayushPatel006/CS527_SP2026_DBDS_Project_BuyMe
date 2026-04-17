@@ -8,7 +8,7 @@ import { mockUsers, mockItems, mockBids, mockCategories, mockCategoryFields, moc
 import type { User, Item, Bid, Category, CategoryField, Question, Notification, Alert, AuthState } from '@/types';
 
 // const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
-
+const API_BASE = import.meta.env.VITE_API_URL || 'http://127.0.0.1:5000';
 // Simulated delay
 const delay = (ms = 300) => new Promise(r => setTimeout(r, ms));
 
@@ -47,26 +47,53 @@ export const api = {
 
   items: {
     async list(filters?: { category_id?: number; search?: string; status?: string }): Promise<Item[]> {
-      await delay();
-      let items = [...mockItems];
-      if (filters?.category_id) items = items.filter(i => i.category_id === filters.category_id);
-      if (filters?.status) items = items.filter(i => i.status === filters.status);
-      if (filters?.search) {
-        const q = filters.search.toLowerCase();
-        items = items.filter(i => i.title.toLowerCase().includes(q) || i.description.toLowerCase().includes(q));
+      const params = new URLSearchParams();
+
+      if (filters?.category_id) params.set('category_id', String(filters.category_id));
+      if (filters?.search) params.set('search', filters.search);
+      if (filters?.status) params.set('status', filters.status);
+
+      const url = `${API_BASE}/items${params.toString() ? `?${params.toString()}` : ''}`;
+      const res = await fetch(url);
+
+      if (!res.ok) {
+        throw new Error('Failed to fetch items');
       }
-      return items;
+
+      return await res.json();
     },
+
     async get(id: number): Promise<Item> {
-      await delay();
-      const item = mockItems.find(i => i.id === id);
+      const res = await fetch(`${API_BASE}/items`);
+
+      if (!res.ok) {
+        throw new Error('Failed to fetch item');
+      }
+
+      const items: Item[] = await res.json();
+      const item = items.find(i => i.id === id);
+
       if (!item) throw new Error('Item not found');
       return item;
     },
+
     async create(data: Partial<Item>): Promise<Item> {
       await delay();
-      const item: Item = { id: Date.now(), status: 'active', created_at: new Date().toISOString(), ...data } as Item;
+      const item: Item = {
+        id: Date.now(),
+        status: 'active',
+        created_at: new Date().toISOString(),
+        ...data,
+      } as Item;
       return item;
+    },
+  },
+
+  stats: {
+    async get() {
+      const res = await fetch(`${API_BASE}/stats`);
+      if (!res.ok) throw new Error('Failed to fetch stats');
+      return await res.json();
     },
   },
 
@@ -88,12 +115,17 @@ export const api = {
 
   categories: {
     async list(): Promise<Category[]> {
-      await delay(100);
-      return mockCategories;
+      const res = await fetch(`${API_BASE}/categories`);
+
+      if (!res.ok) {
+        throw new Error('Failed to fetch categories');
+      }
+
+      return await res.json();
     },
+
     async getFields(categoryId: number): Promise<CategoryField[]> {
       await delay(100);
-      // Return fields for this category and all parent categories
       const cat = mockCategories.find(c => c.id === categoryId);
       const ids = [categoryId];
       if (cat?.parent_id) {
@@ -129,6 +161,7 @@ export const api = {
     },
     async markRead(id: number): Promise<void> { await delay(100); },
   },
+
 
   admin: {
     async createRep(username: string, email: string, password: string): Promise<User> {
@@ -168,3 +201,4 @@ export const api = {
     },
   },
 };
+
