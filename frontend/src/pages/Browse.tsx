@@ -12,10 +12,19 @@ export default function BrowsePage() {
   const [items, setItems] = useState<Item[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
   const [search, setSearch] = useState(searchParams.get('search') || '');
-  const [categoryFilter, setCategoryFilter] = useState<string>('all');
+  // const [categoryFilter, setCategoryFilter] = useState<string>('all');
+  const [parentCategoryFilter, setParentCategoryFilter] = useState<string>('all');
+  const [childCategoryFilter, setChildCategoryFilter] = useState<string>('all');
   const [statusFilter, setStatusFilter] = useState<string>('active');
   const [sortBy, setSortBy] = useState<string>('ending-soon');
   const [loading, setLoading] = useState(true);
+
+  const parentCategories = categories.filter(c => c.level === 'sub');
+
+  const childCategories = categories.filter(c => {
+    if (parentCategoryFilter === 'all') return false;
+    return c.level === 'leaf' && String(c.parent_id) === parentCategoryFilter;
+  });
 
   useEffect(() => {
     api.categories.list().then(setCategories);
@@ -25,7 +34,13 @@ export default function BrowsePage() {
     setLoading(true);
     api.items.list({
       search: search || undefined,
-      category_id: categoryFilter !== 'all' ? Number(categoryFilter) : undefined,
+      // category_id: categoryFilter !== 'all' ? Number(categoryFilter) : undefined,
+      category_id:
+        childCategoryFilter !== 'all'
+          ? Number(childCategoryFilter)
+          : parentCategoryFilter !== 'all'
+          ? Number(parentCategoryFilter)
+          : undefined,
       status: statusFilter !== 'all' ? statusFilter : undefined,
     }).then(data => {
       let sorted = [...data];
@@ -38,7 +53,8 @@ export default function BrowsePage() {
       setItems(sorted);
       setLoading(false);
     });
-  }, [search, categoryFilter, statusFilter, sortBy]);
+  // }, [search, categoryFilter, statusFilter, sortBy]);
+  }, [search, parentCategoryFilter, childCategoryFilter, statusFilter, sortBy]);
 
   return (
     <div className="container py-8">
@@ -49,11 +65,54 @@ export default function BrowsePage() {
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <Input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search by title, make, model..." className="pl-9" />
         </div>
-        <Select value={categoryFilter} onValueChange={setCategoryFilter}>
+        {/* <Select value={categoryFilter} onValueChange={setCategoryFilter}>
           <SelectTrigger className="w-full md:w-48"><SelectValue placeholder="Category" /></SelectTrigger>
           <SelectContent>
             <SelectItem value="all">All Categories</SelectItem>
-            {categories.map(c => <SelectItem key={c.id} value={String(c.id)}>{c.name}</SelectItem>)}
+            {categories
+              .filter(c => c.level === 'sub')
+              .map(c => (
+                <SelectItem key={c.id} value={String(c.id)}>
+                  {c.name}
+                </SelectItem>
+              ))}
+          </SelectContent>
+        </Select> */}
+        <Select
+          value={parentCategoryFilter}
+          onValueChange={(value) => {
+            setParentCategoryFilter(value);
+            setChildCategoryFilter('all');
+          }}
+        >
+          <SelectTrigger className="w-full md:w-48">
+            <SelectValue placeholder="Main Category" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All Categories</SelectItem>
+            {parentCategories.map(c => (
+              <SelectItem key={c.id} value={String(c.id)}>
+                {c.name}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+
+        <Select
+          value={childCategoryFilter}
+          onValueChange={setChildCategoryFilter}
+          disabled={parentCategoryFilter === 'all'}
+        >
+          <SelectTrigger className="w-full md:w-48">
+            <SelectValue placeholder="Subcategory" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All Subcategories</SelectItem>
+            {childCategories.map(c => (
+              <SelectItem key={c.id} value={String(c.id)}>
+                {c.name}
+              </SelectItem>
+            ))}
           </SelectContent>
         </Select>
         <Select value={statusFilter} onValueChange={setStatusFilter}>
