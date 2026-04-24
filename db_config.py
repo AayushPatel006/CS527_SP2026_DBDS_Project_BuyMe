@@ -1,0 +1,5 @@
+DB_USER = "usr"
+DB_PASSWORD = "pwd"
+DB_HOST = "localhost"
+DB_PORT = "3306"
+DB_NAME = "buyme"

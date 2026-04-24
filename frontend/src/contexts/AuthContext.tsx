@@ -1,9 +1,15 @@
-import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import React, {
+  createContext,
+  useContext,
+  useState,
+  useEffect,
+  ReactNode,
+} from 'react';
 import { api } from '@/lib/api';
 import type { User, AuthState } from '@/types';
 
 interface AuthContextType extends AuthState {
-  login: (username: string, password: string) => Promise<void>;
+  login: (username: string, password: string) => Promise<User>;
   register: (username: string, email: string, password: string) => Promise<void>;
   logout: () => void;
 }
@@ -11,26 +17,66 @@ interface AuthContextType extends AuthState {
 const AuthContext = createContext<AuthContextType | null>(null);
 
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const [state, setState] = useState<AuthState>({ user: null, isAuthenticated: false });
+  const [state, setState] = useState<AuthState>({
+    user: null,
+    isAuthenticated: false,
+  });
 
   useEffect(() => {
     const session = api.auth.getSession();
     setState(session);
   }, []);
 
-  const login = async (username: string, password: string) => {
-    const user = await api.auth.login(username, password);
-    setState({ user, isAuthenticated: true });
+  const login = async (username: string, password: string): Promise<User> => {
+    //console.log(username);
+    //console.log(password);
+    const response = await fetch('http://127.0.0.1:5000/api/login', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ username, password }),
+    });
+
+    const data = await response.json();
+
+    if (!response.ok) {
+      throw new Error(data.detail || data.message || 'Invalid username or password');
+    }
+
+    const user: User = data;
+
+    localStorage.setItem('user', JSON.stringify(user));
+
+    setState({
+      user,
+      isAuthenticated: true,
+    });
+
+    return user;
   };
 
-  const register = async (username: string, email: string, password: string) => {
+  const register = async (
+    username: string,
+    email: string,
+    password: string
+  ): Promise<void> => {
     const user = await api.auth.register(username, email, password);
-    setState({ user, isAuthenticated: true });
+
+    setState({
+      user,
+      isAuthenticated: true,
+    });
   };
 
   const logout = () => {
     api.auth.logout();
-    setState({ user: null, isAuthenticated: false });
+    localStorage.removeItem('user');
+
+    setState({
+      user: null,
+      isAuthenticated: false,
+    });
   };
 
   return (
