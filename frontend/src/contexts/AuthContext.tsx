@@ -57,17 +57,40 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   const register = async (
-    username: string,
-    email: string,
-    password: string
-  ): Promise<void> => {
-    const user = await api.auth.register(username, email, password);
+  username: string,
+  email: string,
+  password: string
+): Promise<void> => {
 
-    setState({
-      user,
-      isAuthenticated: true,
-    });
-  };
+  console.log(username)
+  console.log(email)
+  const response = await fetch('http://127.0.0.1:5000/api/register', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ username, email, password }),
+  });
+
+  const data = await response.json();
+  console.log(response.status)
+  
+  if (response.status === 409) {
+  throw new Error('Email or username already exists');
+  } 
+  else if (!response.ok) {
+    throw new Error(data.detail || data.message || 'Registration failed');
+  }
+
+  const user: User = data;
+
+  localStorage.setItem('user', JSON.stringify(user));
+
+  setState({
+    user,
+    isAuthenticated: true,
+  });
+};
 
   const logout = () => {
     api.auth.logout();

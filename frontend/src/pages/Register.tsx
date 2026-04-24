@@ -24,8 +24,18 @@ export default function RegisterPage() {
       await register(username, email, password);
       toast({ title: 'Account created!', description: 'Welcome to BuyMe' });
       navigate('/');
-    } catch {
-      toast({ title: 'Registration failed', variant: 'destructive' });
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : 'Registration failed';
+
+      toast({
+        title: '',
+        description:
+          message === 'Email or username already exists'
+            ? 'Email or username already exists'
+            : 'Registration failed',
+        variant: 'destructive',
+      });
     } finally {
       setLoading(false);
     }

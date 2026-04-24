@@ -25,7 +25,7 @@ def get_db():
 
 @app.route("/")
 def helloworld():
-    print("Hello, World!")  
+    #print("Hello, World!")  
     return "Hello, World!"
 
 @app.route("/api/login", methods=["POST", "OPTIONS"])
@@ -74,6 +74,72 @@ def login():
     finally:
         db.close()
 
+@app.route("/api/register", methods=["POST", "OPTIONS"])
+def register():
+    if request.method == "OPTIONS":
+        return jsonify({"message": "ok"}), 200
+
+    data = request.get_json(silent=True) or {}
+    username = data.get("username", "").strip()
+    email = data.get("email", "").strip()
+    password = data.get("password", "").strip()
+
+    if not username or not email or not password:
+        return jsonify({"detail": "Username, email, and password are required"}), 400
+
+    db: Session = next(get_db())
+
+    try:
+        existing_user = db.execute(
+            text("""
+                SELECT id
+                FROM users
+                WHERE username = :username OR email = :email
+                LIMIT 1
+            """),
+            {
+                "username": username,
+                "email": email,
+            }
+        ).mappings().first()
+
+        if existing_user:
+            return jsonify({"detail": "Username or email already exists"}), 409
+
+        db.execute(
+            text("""
+                INSERT INTO users (username, email, password_hash, role, is_active)
+                VALUES (:username, :email, :password, 'buyer', 1)
+            """),
+            {
+                "username": username,
+                "email": email,
+                "password": password,
+            }
+        )
+        db.commit()
+
+        new_user = db.execute(
+            text("""
+                SELECT id, username, email, role, is_active
+                FROM users
+                WHERE username = :username
+                LIMIT 1
+            """),
+            {
+                "username": username,
+            }
+        ).mappings().first()
+
+        return jsonify({
+            "id": new_user["id"],
+            "username": new_user["username"],
+            "email": new_user["email"],
+            "role": new_user["role"],
+        }), 201
+
+    finally:
+        db.close()
 
 if __name__ == "__main__":
     app.run(debug=True, port=5000)
