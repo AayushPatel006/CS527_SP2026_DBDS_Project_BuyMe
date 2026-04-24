@@ -80,6 +80,7 @@ export interface Question {
   user_id: number;
   item_id?: number;
   rep_id?: number;
+  item_title?: string;
   question_text: string;
   answer_text?: string;
   asked_at: string;

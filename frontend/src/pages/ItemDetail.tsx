@@ -10,6 +10,7 @@ import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Separator } from '@/components/ui/separator';
 import { Switch } from '@/components/ui/switch';
+import { Textarea } from '@/components/ui/textarea';
 import { Clock, TrendingUp, User, DollarSign } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
@@ -30,34 +31,73 @@ export default function ItemDetailPage() {
   const [bidAmount, setBidAmount] = useState('');
   const [autoBid, setAutoBid] = useState(false);
   const [autoBidLimit, setAutoBidLimit] = useState('');
+  const [questionText, setQuestionText] = useState('');
+  const [submittingQuestion, setSubmittingQuestion] = useState(false);
   const [loading, setLoading] = useState(true);
   const { user, isAuthenticated } = useAuth();
   const { toast } = useToast();
 
   useEffect(() => {
     if (!id) return;
-    Promise.all([api.items.get(Number(id)), api.bids.listByItem(Number(id))]).then(([item, bids]) => {
-      setItem(item);
-      setBids(bids);
-      setBidAmount(String((item.current_bid || item.starting_price) + item.bid_increment));
-      setLoading(false);
-    });
-  }, [id]);
+    Promise.all([api.items.get(Number(id)), api.bids.listByItem(Number(id))])
+      .then(([item, bids]) => {
+        setItem(item);
+        setBids(bids);
+        setBidAmount(String((item.current_bid || item.starting_price) + item.bid_increment));
+      })
+      .catch(() => {
+        toast({ title: 'Failed to load item', description: 'Please check backend API and try again.', variant: 'destructive' });
+        setItem(null);
+        setBids([]);
+      })
+      .finally(() => setLoading(false));
+  }, [id, toast]);
 
   const handleBid = async () => {
     if (!item) return;
+    if (user?.id === item.seller_id) {
+      toast({ title: 'Cannot bid', description: 'You cannot bid on your own listing.', variant: 'destructive' });
+      return;
+    }
     const amount = Number(bidAmount);
+    const parsedAutoBidLimit = autoBid ? Number(autoBidLimit) : undefined;
     const minBid = (item.current_bid || item.starting_price) + item.bid_increment;
     if (amount < minBid) {
       toast({ title: 'Bid too low', description: `Minimum bid is $${minBid.toLocaleString()}`, variant: 'destructive' });
       return;
     }
+    if (autoBid && (!parsedAutoBidLimit || Number.isNaN(parsedAutoBidLimit) || parsedAutoBidLimit < amount)) {
+      toast({ title: 'Invalid auto-bid limit', description: 'Set a maximum that is at least your current bid amount.', variant: 'destructive' });
+      return;
+    }
     try {
-      const bid = await api.bids.place(item.id, amount, autoBid ? Number(autoBidLimit) : undefined);
+      const bid = await api.bids.place(item.id, amount, parsedAutoBidLimit, autoBid);
       setBids(prev => [bid, ...prev]);
       toast({ title: 'Bid placed!', description: `Your bid of $${amount.toLocaleString()} was placed successfully.` });
-    } catch {
-      toast({ title: 'Bid failed', variant: 'destructive' });
+    } catch (err) {
+      const description = err instanceof Error ? err.message : 'Unknown error while placing bid.';
+      toast({ title: 'Bid failed', description, variant: 'destructive' });
+    }
+  };
+
+  const handleAskQuestion = async () => {
+    if (!item) return;
+    const text = questionText.trim();
+    if (!text) {
+      toast({ title: 'Enter a question', description: 'Please type your question before submitting.', variant: 'destructive' });
+      return;
+    }
+
+    setSubmittingQuestion(true);
+    try {
+      await api.questions.ask(text, item.id);
+      setQuestionText('');
+      toast({ title: 'Question sent', description: 'A representative will review and respond soon.' });
+    } catch (err) {
+      const description = err instanceof Error ? err.message : 'Failed to submit question.';
+      toast({ title: 'Could not send question', description, variant: 'destructive' });
+    } finally {
+      setSubmittingQuestion(false);
     }
   };
 
@@ -165,7 +205,7 @@ export default function ItemDetailPage() {
                 {item.bid_count || 0} bids · Min increment: ${item.bid_increment}
               </div>
 
-              {!ended && isAuthenticated && user?.role !== 'admin' && user?.role !== 'rep' && (
+              {!ended && isAuthenticated && user?.role !== 'admin' && user?.role !== 'rep' && user?.id !== item.seller_id && (
                 <div className="mt-6 space-y-4">
                   <div className="space-y-2">
                     <Label htmlFor="bid">Your Bid ($)</Label>
@@ -191,6 +231,10 @@ export default function ItemDetailPage() {
                 <p className="mt-4 text-sm text-muted-foreground text-center">Sign in to place a bid</p>
               )}
 
+              {isAuthenticated && !ended && user?.id === item.seller_id && (
+                <p className="mt-4 text-sm text-muted-foreground text-center">You cannot bid on your own listing.</p>
+              )}
+
               {ended && (
                 <div className="mt-4 rounded-lg bg-muted p-4 text-center">
                   <p className="font-semibold">This auction has ended</p>
@@ -198,6 +242,28 @@ export default function ItemDetailPage() {
               )}
             </CardContent>
           </Card>
+
+          {isAuthenticated && (user?.role === 'buyer' || user?.role === 'seller') && (
+            <Card>
+              <CardHeader>
+                <CardTitle>Ask a Representative</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                <p className="text-sm text-muted-foreground">
+                  Have a question about this auction? Send it to customer support.
+                </p>
+                <Textarea
+                  value={questionText}
+                  onChange={e => setQuestionText(e.target.value)}
+                  placeholder="Ask your question..."
+                  rows={4}
+                />
+                <Button className="w-full" onClick={handleAskQuestion} disabled={submittingQuestion || !questionText.trim()}>
+                  {submittingQuestion ? 'Sending...' : 'Send Question'}
+                </Button>
+              </CardContent>
+            </Card>
+          )}
         </div>
       </div>
     </div>

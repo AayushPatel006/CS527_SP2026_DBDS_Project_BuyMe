@@ -1,4 +1,5 @@
 import { Item } from '@/types';
+import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -16,15 +17,24 @@ function timeLeft(closesAt: string): string {
 
 export default function ItemCard({ item }: { item: Item }) {
   const ended = item.status !== 'active' || new Date(item.closes_at) <= new Date();
+  const [imageFailed, setImageFailed] = useState(false);
 
   return (
     <Link to={`/item/${item.id}`}>
       <Card className="group overflow-hidden transition-all hover:shadow-lg hover:-translate-y-1">
         <div className="aspect-[4/3] overflow-hidden bg-muted">
-          {item.image_url ? (
-            <img src={item.image_url} alt={item.title} className="h-full w-full object-cover transition-transform group-hover:scale-105" />
+          {item.image_url && !imageFailed ? (
+            <img
+              src={item.image_url}
+              alt={item.title}
+              className="h-full w-full object-cover transition-transform group-hover:scale-105"
+              loading="lazy"
+              onError={() => setImageFailed(true)}
+            />
           ) : (
-            <div className="flex h-full items-center justify-center text-muted-foreground">No Image</div>
+            <div className="flex h-full items-center justify-center text-center px-4 text-muted-foreground">
+              Image unavailable
+            </div>
           )}
         </div>
         <CardContent className="p-4">

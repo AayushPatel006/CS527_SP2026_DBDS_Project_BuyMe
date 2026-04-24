@@ -73,7 +73,7 @@ export default function Navbar() {
                 <Link to="/login">Sign In</Link>
               </Button>
               <Button size="sm" asChild>
-                <Link to="/register">Sign Up</Link>
+                <Link to="/register">Sign Up and Buy</Link>
               </Button>
             </>
           )}

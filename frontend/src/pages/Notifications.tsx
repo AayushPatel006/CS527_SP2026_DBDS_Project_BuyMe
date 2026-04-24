@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { api } from '@/lib/api';
 import { useAuth } from '@/contexts/AuthContext';
-import type { Notification } from '@/types';
+import type { Notification, Question } from '@/types';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -17,12 +17,16 @@ const typeColors: Record<string, string> = {
 };
 
 export default function NotificationsPage() {
-  const { isAuthenticated } = useAuth();
+  const { user, isAuthenticated } = useAuth();
   const [notifications, setNotifications] = useState<Notification[]>([]);
+  const [myQuestions, setMyQuestions] = useState<Question[]>([]);
 
   useEffect(() => {
-    if (isAuthenticated) api.notifications.list().then(setNotifications);
-  }, [isAuthenticated]);
+    if (!isAuthenticated || !user?.id) return;
+
+    api.notifications.list().then(setNotifications);
+    api.questions.list({ user_id: user.id }).then(setMyQuestions);
+  }, [isAuthenticated, user?.id]);
 
   if (!isAuthenticated) return <div className="container py-16 text-center text-muted-foreground">Please sign in to view notifications.</div>;
 
@@ -30,6 +34,8 @@ export default function NotificationsPage() {
     await api.notifications.markRead(id);
     setNotifications(prev => prev.map(n => n.id === id ? { ...n, is_read: true } : n));
   };
+
+  const answeredQuestions = myQuestions.filter(q => !!q.answer_text);
 
   return (
     <div className="container max-w-2xl py-8">
@@ -65,6 +71,28 @@ export default function NotificationsPage() {
           ))}
         </div>
       )}
+
+      <div className="mt-10">
+        <h2 className="font-heading text-2xl font-semibold mb-4">My Questions and Answers</h2>
+        {answeredQuestions.length === 0 ? (
+          <div className="text-muted-foreground">No answered questions yet.</div>
+        ) : (
+          <div className="space-y-3">
+            {answeredQuestions.map(q => (
+              <Card key={q.id}>
+                <CardContent className="p-4 space-y-2">
+                  <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                    <Badge variant="outline">{q.item_title || 'General'}</Badge>
+                    <span>{new Date(q.answered_at || q.asked_at).toLocaleString()}</span>
+                  </div>
+                  <p className="text-sm"><span className="font-medium">Question:</span> {q.question_text}</p>
+                  <p className="text-sm"><span className="font-medium">Answer:</span> {q.answer_text}</p>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+        )}
+      </div>
     </div>
   );
 }

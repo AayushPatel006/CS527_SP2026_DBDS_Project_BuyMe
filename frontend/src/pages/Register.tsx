@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { useNavigate, Link } from 'react-router-dom';
+import { useMemo, useState } from 'react';
+import { useNavigate, Link, useSearchParams } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -9,6 +9,7 @@ import { Gavel } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 
 export default function RegisterPage() {
+  const [searchParams] = useSearchParams();
   const [username, setUsername] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -16,16 +17,21 @@ export default function RegisterPage() {
   const { register } = useAuth();
   const navigate = useNavigate();
   const { toast } = useToast();
+  const desiredRole = useMemo(() => (searchParams.get('role') === 'seller' ? 'seller' : 'buyer'), [searchParams]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
     try {
-      await register(username, email, password);
-      toast({ title: 'Account created!', description: 'Welcome to BuyMe' });
+      await register(username, email, password, desiredRole);
+      toast({
+        title: 'Account created!',
+        description: desiredRole === 'seller' ? 'Your seller account is ready.' : 'Welcome to BuyMe',
+      });
       navigate('/');
-    } catch {
-      toast({ title: 'Registration failed', variant: 'destructive' });
+    } catch (err) {
+      const description = err instanceof Error ? err.message : 'Registration failed';
+      toast({ title: 'Registration failed', description, variant: 'destructive' });
     } finally {
       setLoading(false);
     }
@@ -39,7 +45,9 @@ export default function RegisterPage() {
             <Gavel className="h-6 w-6 text-primary" />
           </div>
           <CardTitle className="font-heading text-2xl">Create an account</CardTitle>
-          <CardDescription>Join BuyMe to buy and sell vehicles</CardDescription>
+          <CardDescription>
+            {desiredRole === 'seller' ? 'Join BuyMe to sell vehicles' : 'Join BuyMe to buy vehicles'}
+          </CardDescription>
         </CardHeader>
         <CardContent>
           <form onSubmit={handleSubmit} className="space-y-4">
@@ -55,8 +63,8 @@ export default function RegisterPage() {
               <Label htmlFor="password">Password</Label>
               <Input id="password" type="password" value={password} onChange={e => setPassword(e.target.value)} required />
             </div>
-            <Button type="submit" className="w-full" disabled={loading}>
-              {loading ? 'Creating account...' : 'Sign Up'}
+              <Button type="submit" className="w-full" disabled={loading}>
+              {loading ? 'Creating account...' : desiredRole === 'seller' ? 'Create Seller Account' : 'Sign Up'}
             </Button>
           </form>
           <p className="mt-4 text-center text-sm text-muted-foreground">

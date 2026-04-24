@@ -8,9 +8,11 @@ import { ArrowRight, Gavel, Search, Shield } from 'lucide-react';
 
 export default function HomePage() {
   const [featured, setFeatured] = useState<Item[]>([]);
+  const [stats, setStats] = useState({ active_auctions: 0, verified_sellers: 0, vehicles_listed: 0 });
 
   useEffect(() => {
     api.items.list({ status: 'active' }).then(items => setFeatured(items.slice(0, 6)));
+    api.home.stats().then(setStats).catch(() => setStats({ active_auctions: 0, verified_sellers: 0, vehicles_listed: 0 }));
   }, []);
 
   return (
@@ -30,8 +32,16 @@ export default function HomePage() {
               <Button size="lg" variant="secondary" asChild>
                 <Link to="/browse"><Search className="h-4 w-4 mr-2" />Browse Auctions</Link>
               </Button>
-              <Button size="lg" variant="outline" className="border-primary-foreground/30 text-primary-foreground hover:bg-primary-foreground/10" asChild>
-                <Link to="/register">Start Selling <ArrowRight className="h-4 w-4 ml-2" /></Link>
+              <Button
+                size="lg"
+                className="group relative overflow-hidden rounded-xl border border-white/40 bg-blue-500/30 text-white font-bold backdrop-blur-xl shadow-[inset_0_1px_0_rgba(255,255,255,0.55),0_10px_30px_rgba(37,99,235,0.35)] transition-all duration-300 hover:bg-blue-500/40 hover:shadow-[inset_0_1px_0_rgba(255,255,255,0.65),0_14px_34px_rgba(37,99,235,0.45)]"
+                asChild
+              >
+                <Link to="/register?role=seller" className="relative flex items-center">
+                  <span className="pointer-events-none absolute inset-0 bg-[linear-gradient(120deg,rgba(255,255,255,0.45)_0%,rgba(255,255,255,0.08)_42%,rgba(255,255,255,0)_68%)] opacity-80 transition-opacity duration-300 group-hover:opacity-100" />
+                  <span className="relative">Start Selling</span>
+                  <ArrowRight className="relative h-4 w-4 ml-2" />
+                </Link>
               </Button>
             </div>
           </div>
@@ -42,9 +52,9 @@ export default function HomePage() {
       <section className="border-b bg-card">
         <div className="container grid grid-cols-3 divide-x py-8">
           {[
-            { icon: Gavel, label: 'Active Auctions', value: '150+' },
-            { icon: Shield, label: 'Verified Sellers', value: '50+' },
-            { icon: Search, label: 'Vehicles Listed', value: '1,200+' },
+            { icon: Gavel, label: 'Active Auctions', value: stats.active_auctions.toLocaleString() },
+            { icon: Shield, label: 'Verified Sellers', value: stats.verified_sellers.toLocaleString() },
+            { icon: Search, label: 'Vehicles Listed', value: stats.vehicles_listed.toLocaleString() },
           ].map(({ icon: Icon, label, value }) => (
             <div key={label} className="text-center px-4">
               <Icon className="h-6 w-6 mx-auto mb-2 text-primary" />

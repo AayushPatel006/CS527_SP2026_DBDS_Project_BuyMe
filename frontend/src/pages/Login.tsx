@@ -22,8 +22,9 @@ export default function LoginPage() {
     try {
       await login(username, password);
       navigate('/');
-    } catch {
-      toast({ title: 'Login failed', description: 'Invalid username or password', variant: 'destructive' });
+    } catch (err) {
+      const description = err instanceof Error ? err.message : 'Invalid username or password';
+      toast({ title: 'Login failed', description, variant: 'destructive' });
     } finally {
       setLoading(false);
     }
@@ -54,7 +55,7 @@ export default function LoginPage() {
             </Button>
           </form>
           <p className="mt-4 text-center text-sm text-muted-foreground">
-            Demo accounts: <code className="text-xs bg-muted px-1 rounded">admin</code>, <code className="text-xs bg-muted px-1 rounded">john_seller</code>, <code className="text-xs bg-muted px-1 rounded">jane_buyer</code>, <code className="text-xs bg-muted px-1 rounded">rep_mike</code>
+            Demo accounts: <code className="text-xs bg-muted px-1 rounded">admin</code>, <code className="text-xs bg-muted px-1 rounded">john_seller</code>, <code className="text-xs bg-muted px-1 rounded">jane_buyer</code>, <code className="text-xs bg-muted px-1 rounded">rep_mike</code> (password: <code className="text-xs bg-muted px-1 rounded">demo123</code>)
           </p>
           <p className="mt-2 text-center text-sm text-muted-foreground">
             Don't have an account? <Link to="/register" className="text-primary hover:underline">Sign up</Link>
