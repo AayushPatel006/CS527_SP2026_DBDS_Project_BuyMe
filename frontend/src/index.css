@@ -1,0 +1,366 @@
+@import url("https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700;800&family=Space+Grotesk:wght@400;500;600;700&display=swap");
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 215 55% 98%;
+    --foreground: 222 45% 10%;
+
+    --card: 0 0% 100%;
+    --card-foreground: 222 45% 10%;
+
+    --popover: 0 0% 100%;
+    --popover-foreground: 222 45% 10%;
+
+    --primary: 222 88% 42%;
+    --primary-foreground: 0 0% 100%;
+
+    --secondary: 215 50% 94%;
+    --secondary-foreground: 222 35% 18%;
+
+    --muted: 215 42% 94%;
+    --muted-foreground: 215 14% 45%;
+
+    --accent: 199 90% 58%;
+    --accent-foreground: 222 45% 10%;
+
+    --destructive: 0 84% 60%;
+    --destructive-foreground: 0 0% 100%;
+
+    --border: 215 38% 86%;
+    --input: 215 38% 88%;
+    --ring: 222 88% 42%;
+
+    --success: 145 65% 42%;
+    --success-foreground: 0 0% 100%;
+
+    --warning: 38 92% 50%;
+    --warning-foreground: 0 0% 100%;
+
+    --radius: 1rem;
+  }
+
+  .dark {
+    --background: 222 50% 6%;
+    --foreground: 210 35% 96%;
+
+    --card: 222 38% 10%;
+    --card-foreground: 210 35% 96%;
+
+    --popover: 222 38% 10%;
+    --popover-foreground: 210 35% 96%;
+
+    --primary: 217 90% 58%;
+    --primary-foreground: 0 0% 100%;
+
+    --secondary: 222 32% 16%;
+    --secondary-foreground: 210 35% 92%;
+
+    --muted: 222 30% 15%;
+    --muted-foreground: 215 18% 66%;
+
+    --accent: 199 90% 64%;
+    --accent-foreground: 222 45% 8%;
+
+    --destructive: 0 70% 42%;
+    --destructive-foreground: 0 0% 100%;
+
+    --border: 222 28% 22%;
+    --input: 222 28% 22%;
+    --ring: 217 90% 58%;
+  }
+
+  * {
+    box-sizing: border-box;
+    border-color: hsl(var(--border));
+  }
+
+  html {
+    scroll-behavior: smooth;
+  }
+
+  body {
+    @apply min-h-screen text-foreground font-body antialiased;
+    margin: 0;
+    background:
+      radial-gradient(circle at top left, hsl(var(--primary) / 0.24), transparent 34rem),
+      radial-gradient(circle at top right, hsl(var(--accent) / 0.22), transparent 30rem),
+      radial-gradient(circle at bottom, hsl(199 90% 58% / 0.14), transparent 34rem),
+      linear-gradient(135deg, hsl(var(--background)), hsl(215 70% 96%));
+  }
+
+  .dark body {
+    background:
+      radial-gradient(circle at top left, hsl(var(--primary) / 0.28), transparent 34rem),
+      radial-gradient(circle at top right, hsl(var(--accent) / 0.2), transparent 30rem),
+      radial-gradient(circle at bottom, hsl(199 90% 58% / 0.12), transparent 34rem),
+      linear-gradient(135deg, hsl(var(--background)), hsl(222 55% 4%));
+  }
+
+  h1,
+  h2,
+  h3,
+  h4,
+  h5,
+  h6 {
+    @apply font-heading font-bold tracking-tight;
+  }
+
+  button,
+  input,
+  textarea,
+  select {
+    font: inherit;
+  }
+
+  ::selection {
+    background: hsl(var(--primary) / 0.25);
+    color: hsl(var(--foreground));
+  }
+}
+
+@layer components {
+  .premium-card {
+    @apply relative overflow-hidden rounded-3xl border p-6 shadow-2xl backdrop-blur-xl transition-all duration-300;
+    border-color: rgba(96, 165, 250, 0.5);
+    background:
+      radial-gradient(circle at top left, rgba(125, 211, 252, 0.26), transparent 38%),
+      linear-gradient(180deg, rgba(239, 246, 255, 0.92), rgba(191, 219, 254, 0.72));
+    box-shadow:
+      0 28px 90px rgba(30, 64, 175, 0.2),
+      inset 0 1px 0 rgba(255, 255, 255, 0.7);
+  }
+
+  .premium-card:hover {
+    @apply -translate-y-1;
+    box-shadow:
+      0 38px 115px rgba(30, 64, 175, 0.3),
+      0 0 45px rgba(125, 211, 252, 0.56),
+      inset 0 1px 0 rgba(255, 255, 255, 0.82);
+  }
+
+  .glass-button,
+  button {
+    @apply relative overflow-hidden rounded-full border px-6 py-3 font-bold text-white shadow-xl transition-all duration-300 active:scale-95;
+    border-color: rgba(255, 255, 255, 0.4);
+    background:
+      linear-gradient(135deg, rgba(255, 255, 255, 0.36), rgba(255, 255, 255, 0.08)),
+      linear-gradient(135deg, #60a5fa, #1d4ed8, #7dd3fc);
+    box-shadow:
+      0 18px 50px rgba(29, 78, 216, 0.5),
+      0 0 36px rgba(125, 211, 252, 0.45),
+      inset 0 1px 0 rgba(255, 255, 255, 0.68);
+    backdrop-filter: blur(18px);
+    -webkit-backdrop-filter: blur(18px);
+  }
+
+  .glass-button::before,
+  button::before {
+    content: "";
+    @apply absolute inset-0 -translate-x-full transition-transform duration-700;
+    background: linear-gradient(
+      120deg,
+      transparent,
+      rgba(255, 255, 255, 0.82),
+      transparent
+    );
+  }
+
+  .glass-button:hover,
+  button:hover {
+    @apply -translate-y-1 scale-[1.02];
+    box-shadow:
+      0 30px 80px rgba(29, 78, 216, 0.68),
+      0 0 56px rgba(125, 211, 252, 0.68),
+      inset 0 1px 0 rgba(255, 255, 255, 0.78);
+  }
+
+  .glass-button:hover::before,
+  button:hover::before {
+    @apply translate-x-full;
+  }
+
+  .premium-input {
+    @apply rounded-2xl border bg-white/70 px-4 py-3 text-foreground outline-none backdrop-blur-xl transition-all duration-200 dark:bg-white/10;
+  }
+
+  .premium-input:focus {
+    @apply border-primary ring-4 ring-primary/20;
+  }
+
+  .premium-heading {
+    @apply bg-clip-text text-transparent;
+    background-image: linear-gradient(90deg, #1e3a8a, #2563eb, #7dd3fc, #1e3a8a);
+    background-size: 220% auto;
+    animation: blue-shimmer 3.5s linear infinite;
+  }
+
+  .premium-section {
+    @apply rounded-[2rem] border p-8 shadow-2xl backdrop-blur-2xl transition-all duration-300;
+    border-color: rgba(96, 165, 250, 0.46);
+    background:
+      radial-gradient(circle at top left, rgba(125, 211, 252, 0.22), transparent 36%),
+      rgba(255, 255, 255, 0.66);
+    box-shadow:
+      0 30px 100px rgba(30, 64, 175, 0.18),
+      inset 0 1px 0 rgba(255, 255, 255, 0.68);
+  }
+
+  .shine-panel {
+    @apply relative overflow-hidden;
+  }
+
+  .shine-panel::after,
+  .animate-shine::after,
+  .premium-card::after {
+    content: "";
+    @apply pointer-events-none absolute inset-0;
+    transform: translateX(-120%);
+    background: linear-gradient(
+      120deg,
+      transparent 28%,
+      rgba(255, 255, 255, 0.68),
+      transparent 72%
+    );
+    animation: shine-sweep 3.5s ease-in-out infinite;
+  }
+}
+
+@layer utilities {
+  .animate-premium-fade {
+    animation: premium-fade 520ms ease both;
+  }
+
+  .animate-fade-up {
+    animation: fade-up 0.7s ease both;
+  }
+
+  .animate-float-soft {
+    animation: float-soft 5s ease-in-out infinite;
+  }
+
+  .animate-float {
+    animation: float 4s ease-in-out infinite;
+  }
+
+  .animate-blue-glow,
+  .animate-lilac-glow {
+    animation: blue-glow 2.8s ease-in-out infinite;
+  }
+
+  .animate-pulse-glow {
+    animation: pulse-glow 2.8s ease-in-out infinite;
+  }
+
+  .animate-shimmer {
+    background-size: 220% 100%;
+    animation: blue-shimmer 3.5s linear infinite;
+  }
+
+  .animate-shine {
+    position: relative;
+    overflow: hidden;
+  }
+}
+
+@keyframes shine-sweep {
+  0% {
+    transform: translateX(-120%);
+    opacity: 0;
+  }
+
+  35% {
+    opacity: 1;
+  }
+
+  70%,
+  100% {
+    transform: translateX(120%);
+    opacity: 0;
+  }
+}
+
+@keyframes blue-shimmer {
+  to {
+    background-position: -220% center;
+  }
+}
+
+@keyframes blue-glow {
+  0%,
+  100% {
+    box-shadow: 0 18px 48px rgba(29, 78, 216, 0.42);
+  }
+
+  50% {
+    box-shadow:
+      0 28px 78px rgba(29, 78, 216, 0.66),
+      0 0 52px rgba(125, 211, 252, 0.62);
+  }
+}
+
+@keyframes pulse-glow {
+  0%,
+  100% {
+    box-shadow: 0 18px 48px rgba(29, 78, 216, 0.42);
+  }
+
+  50% {
+    box-shadow:
+      0 30px 80px rgba(29, 78, 216, 0.68),
+      0 0 58px rgba(125, 211, 252, 0.68);
+  }
+}
+
+@keyframes float-soft {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+
+  50% {
+    transform: translateY(-10px);
+  }
+}
+
+@keyframes float {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+
+  50% {
+    transform: translateY(-12px);
+  }
+}
+
+@keyframes premium-fade {
+  from {
+    opacity: 0;
+    transform: translateY(16px) scale(0.98);
+    filter: blur(5px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+    filter: blur(0);
+  }
+}
+
+@keyframes fade-up {
+  from {
+    opacity: 0;
+    transform: translateY(18px) scale(0.98);
+    filter: blur(6px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+    filter: blur(0);
+  }
+}
