@@ -12,34 +12,74 @@ export default function BrowsePage() {
   const [items, setItems] = useState<Item[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
   const [search, setSearch] = useState(searchParams.get('search') || '');
-  const [categoryFilter, setCategoryFilter] = useState<string>('all');
+  // const [categoryFilter, setCategoryFilter] = useState<string>('all');
+  const [parentCategoryFilter, setParentCategoryFilter] = useState<string>('all');
+  const [childCategoryFilter, setChildCategoryFilter] = useState<string>('all');
   const [statusFilter, setStatusFilter] = useState<string>('active');
   const [sortBy, setSortBy] = useState<string>('ending-soon');
   const [loading, setLoading] = useState(true);
+
+  const parentCategories = categories.filter(c => c.level === 'sub');
+  const childCategories = categories.filter(c => {
+    if (parentCategoryFilter === 'all') return false;
+    return c.level === 'leaf' && String(c.parent_id) === parentCategoryFilter;
+  });
 
   useEffect(() => {
     api.categories.list().then(setCategories);
   }, []);
 
-  useEffect(() => {
-    setLoading(true);
-    api.items.list({
-      search: search || undefined,
-      category_id: categoryFilter !== 'all' ? Number(categoryFilter) : undefined,
-      status: statusFilter !== 'all' ? statusFilter : undefined,
-    }).then(data => {
-      let sorted = [...data];
-      switch (sortBy) {
-        case 'ending-soon': sorted.sort((a, b) => new Date(a.closes_at).getTime() - new Date(b.closes_at).getTime()); break;
-        case 'price-low': sorted.sort((a, b) => (a.current_bid || a.starting_price) - (b.current_bid || b.starting_price)); break;
-        case 'price-high': sorted.sort((a, b) => (b.current_bid || b.starting_price) - (a.current_bid || a.starting_price)); break;
-        case 'most-bids': sorted.sort((a, b) => (b.bid_count || 0) - (a.bid_count || 0)); break;
-      }
-      setItems(sorted);
-      setLoading(false);
-    });
-  }, [search, categoryFilter, statusFilter, sortBy]);
+  // useEffect(() => {
+  //   setLoading(true);
+  //   api.items.list({
+  //     search: search || undefined,
+  //     // category_id: categoryFilter !== 'all' ? Number(categoryFilter) : undefined,
+  //     category_id:
+  //       childCategoryFilter !== 'all'
+  //         ? Number(childCategoryFilter)
+  //         : parentCategoryFilter !== 'all'
+  //         ? Number(parentCategoryFilter)
+  //         : undefined,
+  //     status: statusFilter !== 'all' ? statusFilter : undefined,
+  //   }).then(data => {
+  //     let sorted = [...data];
+  //     switch (sortBy) {
+  //       case 'ending-soon': sorted.sort((a, b) => new Date(a.closes_at).getTime() - new Date(b.closes_at).getTime()); break;
+  //       case 'price-low': sorted.sort((a, b) => (a.current_bid || a.starting_price) - (b.current_bid || b.starting_price)); break;
+  //       case 'price-high': sorted.sort((a, b) => (b.current_bid || b.starting_price) - (a.current_bid || a.starting_price)); break;
+  //       case 'most-bids': sorted.sort((a, b) => (b.bid_count || 0) - (a.bid_count || 0)); break;
+  //     }
+  //     setItems(sorted);
+  //     setLoading(false);
+  //   });
+  // // }, [search, categoryFilter, statusFilter, sortBy]);
+  // }, [search, parentCategoryFilter, childCategoryFilter, statusFilter, sortBy]);
+    useEffect(() => {
+      setLoading(true);
 
+      api.items.list({
+        search: search || undefined,
+        category_id:
+          childCategoryFilter !== 'all'
+            ? Number(childCategoryFilter)
+            : parentCategoryFilter !== 'all'
+            ? Number(parentCategoryFilter)
+            : undefined,
+        status: statusFilter !== 'all' ? statusFilter : undefined,
+      })
+        .then(data => {
+          console.log('raw data from api:', data);
+          console.log('data length:', data.length);
+          setItems(data);
+        })
+        .catch(error => {
+          console.error('Failed to load items:', error);
+          setItems([]);
+        })
+        .finally(() => {
+          setLoading(false);
+        });
+  }, [search, parentCategoryFilter, childCategoryFilter, statusFilter, sortBy]);
   return (
     <div className="container py-8">
       <h1 className="font-heading text-3xl font-bold mb-6">Browse Auctions</h1>
@@ -49,11 +89,48 @@ export default function BrowsePage() {
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <Input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search by title, make, model..." className="pl-9" />
         </div>
-        <Select value={categoryFilter} onValueChange={setCategoryFilter}>
+        {/* <Select value={categoryFilter} onValueChange={setCategoryFilter}>
           <SelectTrigger className="w-full md:w-48"><SelectValue placeholder="Category" /></SelectTrigger>
           <SelectContent>
             <SelectItem value="all">All Categories</SelectItem>
             {categories.map(c => <SelectItem key={c.id} value={String(c.id)}>{c.name}</SelectItem>)}
+          </SelectContent>
+        </Select> */}
+        <Select
+          value={parentCategoryFilter}
+          onValueChange={(value) => {
+            setParentCategoryFilter(value);
+            setChildCategoryFilter('all');
+          }}
+        >
+          <SelectTrigger className="w-full md:w-48">
+            <SelectValue placeholder="Main Category" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All Categories</SelectItem>
+            {parentCategories.map(c => (
+              <SelectItem key={c.id} value={String(c.id)}>
+                {c.name}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+
+        <Select
+          value={childCategoryFilter}
+          onValueChange={setChildCategoryFilter}
+          disabled={parentCategoryFilter === 'all'}
+        >
+          <SelectTrigger className="w-full md:w-48">
+            <SelectValue placeholder="Subcategory" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All Subcategories</SelectItem>
+            {childCategories.map(c => (
+              <SelectItem key={c.id} value={String(c.id)}>
+                {c.name}
+              </SelectItem>
+            ))}
           </SelectContent>
         </Select>
         <Select value={statusFilter} onValueChange={setStatusFilter}>
