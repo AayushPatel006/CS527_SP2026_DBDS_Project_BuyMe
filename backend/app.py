@@ -263,7 +263,8 @@ def insert_categories():
         (7, 'Sports Cars', 2, 'leaf'),
         (8, 'Pickup Trucks', 3, 'leaf'),
         (9, 'Cruisers', 4, 'leaf'),
-        (10, 'Sport Bikes', 4, 'leaf')
+        (10, 'Sport Bikes', 4, 'leaf'),
+        (11, 'Other', NULL, 'leaf')
     """)
 
     with engine.begin() as conn:
@@ -953,6 +954,7 @@ def api_admin_sales_report():
 @app.route("/api/categories", methods=["GET"])
 def api_list_categories():
     try:
+        insert_categories()
         with engine.connect() as conn:
             rows = conn.execute(
                 text("SELECT id, name, parent_id, level FROM category ORDER BY id")
@@ -966,6 +968,7 @@ def api_list_categories():
 @app.route("/api/categories/<int:category_id>/fields", methods=["GET"])
 def api_category_fields(category_id):
     try:
+        insert_categories()
         with engine.connect() as conn:
             exists = conn.execute(
                 text("SELECT id FROM category WHERE id = :category_id"),
@@ -1051,6 +1054,7 @@ def api_list_items():
             return jsonify({"error": "closes_at must be in the future"}), 400
 
         try:
+            insert_categories()
             with engine.begin() as conn:
                 seller = conn.execute(
                     text("SELECT id, is_active FROM users WHERE id = :seller_id"),
