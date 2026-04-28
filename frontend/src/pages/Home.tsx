@@ -13,6 +13,16 @@ export default function HomePage() {
     api.items.list({ status: 'active' }).then(items => setFeatured(items.slice(0, 6)));
   }, []);
 
+
+  const [stats, setStats] = useState({
+          active_auctions: 0,
+          verified_sellers: 0,
+          vehicles_listed: 0,
+        });
+
+  useEffect(() => {
+    api.stats.get().then(setStats);
+  }, []);
   return (
     <div>
       {/* Hero */}
@@ -42,9 +52,12 @@ export default function HomePage() {
       <section className="border-b bg-card">
         <div className="container grid grid-cols-3 divide-x py-8">
           {[
-            { icon: Gavel, label: 'Active Auctions', value: '150+' },
-            { icon: Shield, label: 'Verified Sellers', value: '50+' },
-            { icon: Search, label: 'Vehicles Listed', value: '1,200+' },
+            // { icon: Gavel, label: 'Active Auctions', value: '150+' },
+            // { icon: Shield, label: 'Verified Sellers', value: '50+' },
+            // { icon: Search, label: 'Vehicles Listed', value: '1,200+' },
+            { icon: Gavel, label: 'Active Auctions', value: stats.active_auctions },
+            { icon: Shield, label: 'Verified Sellers', value: stats.verified_sellers },
+            { icon: Search, label: 'Vehicles Listed', value: stats.vehicles_listed },
           ].map(({ icon: Icon, label, value }) => (
             <div key={label} className="text-center px-4">
               <Icon className="h-6 w-6 mx-auto mb-2 text-primary" />

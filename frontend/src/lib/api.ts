@@ -8,7 +8,7 @@ import { mockUsers, mockItems, mockBids, mockCategories, mockCategoryFields, moc
 import type { User, Item, Bid, Category, CategoryField, Question, Notification, Alert, AuthState } from '@/types';
 
 // const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
-
+const API_BASE = import.meta.env.VITE_API_URL || 'http://127.0.0.1:5000';
 // Simulated delay
 const delay = (ms = 300) => new Promise(r => setTimeout(r, ms));
 
@@ -46,16 +46,35 @@ export const api = {
   },
 
   items: {
+    // async list(filters?: { category_id?: number; search?: string; status?: string }): Promise<Item[]> {
+    //   await delay();
+    //   let items = [...mockItems];
+    //   if (filters?.category_id) items = items.filter(i => i.category_id === filters.category_id);
+    //   if (filters?.status) items = items.filter(i => i.status === filters.status);
+    //   if (filters?.search) {
+    //     const q = filters.search.toLowerCase();
+    //     items = items.filter(i => i.title.toLowerCase().includes(q) || i.description.toLowerCase().includes(q));
+    //   }
+    //   return items;
+    // },
     async list(filters?: { category_id?: number; search?: string; status?: string }): Promise<Item[]> {
-      await delay();
-      let items = [...mockItems];
-      if (filters?.category_id) items = items.filter(i => i.category_id === filters.category_id);
-      if (filters?.status) items = items.filter(i => i.status === filters.status);
-      if (filters?.search) {
-        const q = filters.search.toLowerCase();
-        items = items.filter(i => i.title.toLowerCase().includes(q) || i.description.toLowerCase().includes(q));
+      const params = new URLSearchParams();
+
+      if (filters?.category_id !== undefined) {
+        params.append('category_id', String(filters.category_id));
       }
-      return items;
+      if (filters?.search) {
+        params.append('search', filters.search);
+      }
+      if (filters?.status) {
+        params.append('status', filters.status);
+      }
+
+      const response = await fetch(`${API_BASE}/items?${params.toString()}`);
+      if (!response.ok) {
+        throw new Error('Failed to fetch items');
+      }
+      return response.json();
     },
     async get(id: number): Promise<Item> {
       await delay();
@@ -87,9 +106,16 @@ export const api = {
   },
 
   categories: {
+    // async list(): Promise<Category[]> {
+    //   await delay(100);
+    //   return mockCategories;
+    // },
     async list(): Promise<Category[]> {
-      await delay(100);
-      return mockCategories;
+      const response = await fetch(`${API_BASE}/categories`);
+      if (!response.ok) {
+        throw new Error('Failed to fetch categories');
+      }
+      return response.json();
     },
     async getFields(categoryId: number): Promise<CategoryField[]> {
       await delay(100);
@@ -165,6 +191,16 @@ export const api = {
     async listUsers(): Promise<User[]> {
       await delay();
       return mockUsers;
+    },
+  },
+
+  stats: {
+    async get(): Promise<{ active_auctions: number; verified_sellers: number; vehicles_listed: number }> {
+      const response = await fetch(`${API_BASE}/stats`);
+      if (!response.ok) {
+        throw new Error('Failed to fetch stats');
+      }
+      return response.json();
     },
   },
 };

@@ -1,12 +1,14 @@
-from flask import Flask, jsonify
+# from flask import Flask, jsonify
+from flask_cors import CORS
+from flask import Flask, jsonify, request
 from sqlalchemy import create_engine, text
 from sqlalchemy.exc import SQLAlchemyError
 
 app = Flask(__name__)
-
+CORS(app)
 # Update these with your MySQL credentials
-DB_USER = "user"
-DB_PASSWORD = "pwd"
+DB_USER = "root"
+DB_PASSWORD = "happyDAY1134"
 DB_HOST = "localhost"
 DB_PORT = "3306"
 DB_NAME = "buyme"
@@ -274,11 +276,45 @@ def insert_notifications():
 
     return {"message": "Notifications inserted successfully"}
 
-
+def get_default_image(category_name):
+    mapping = {
+        "Sedans": "https://images.unsplash.com/photo-1533473359331-0135ef1b58bf?w=600",
+        "SUVs": "https://images.unsplash.com/photo-1568605117036-5fe5e7bab0b7?w=600",
+        "Sports Cars": "https://images.unsplash.com/photo-1503376780353-7e6692767b70?w=600",
+        "Pickup Trucks": "https://images.unsplash.com/photo-1544636331-e26879cd4d9b?w=600",
+        "Cruisers": "https://images.unsplash.com/photo-1449426468159-d96dbf08f19f?w=600",
+        "Sport Bikes": "https://images.unsplash.com/photo-1558981403-c5f9899a28bc?w=600",
+    }
+    return mapping.get(category_name)
 
 @app.route("/", methods=["GET"])
 def home():
     return jsonify({"message": "BuyMe seed API is running"}), 200
+
+@app.route("/categories", methods=["GET"])
+def get_categories():
+    try:
+        with engine.connect() as conn:
+            result = conn.execute(text("""
+                SELECT id, name, parent_id, level
+                FROM category
+                ORDER BY id
+            """))
+            rows = result.fetchall()
+
+            categories = [
+                {
+                    "id": row.id,
+                    "name": row.name,
+                    "parent_id": row.parent_id,
+                    "level": row.level
+                }
+                for row in rows
+            ]
+
+        return jsonify(categories), 200
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 
 
 @app.route("/seed/users", methods=["POST"])
@@ -356,7 +392,125 @@ def api_seed_all():
 
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+@app.route("/items", methods=["GET"])
+def get_items():
+    try:
+        search = request.args.get("search")
+        category_id = request.args.get("category_id")
+        status = request.args.get("status")
 
+        query = """
+            SELECT
+                i.id,
+                i.seller_id,
+                i.category_id,
+                i.title,
+                i.description,
+                i.starting_price,
+                i.reserve_price,
+                i.bid_increment,
+                i.closes_at,
+                i.created_at,
+                CASE
+                    WHEN i.closes_at < NOW() THEN 'closed'
+                    ELSE 'active'
+                END AS status,
+                u.username AS seller_username,
+                c.name AS category_name,
+                COALESCE(MAX(b.amount), i.starting_price) AS current_bid,
+                COUNT(b.id) AS bid_count
+            FROM items i
+            JOIN users u ON i.seller_id = u.id
+            JOIN category c ON i.category_id = c.id
+            LEFT JOIN bids b ON i.id = b.item_id
+            WHERE 1=1
+        """
 
+        params = {}
+
+        if category_id:
+            category_id = int(category_id)
+
+            if category_id == 2:  # Cars
+                query += " AND i.category_id IN (5, 6, 7)"
+            elif category_id == 3:  # Trucks
+                query += " AND i.category_id IN (8)"
+            elif category_id == 4:  # Motorcycles
+                query += " AND i.category_id IN (9, 10)"
+            else:
+                query += " AND i.category_id = :category_id"
+                params["category_id"] = category_id
+
+        if status:
+            if status == "active":
+                query += " AND i.closes_at >= NOW()"
+            elif status == "closed":
+                query += " AND i.closes_at < NOW()"
+
+        if search:
+            query += " AND (LOWER(i.title) LIKE :search OR LOWER(i.description) LIKE :search)"
+            params["search"] = f"%{search.lower()}%"
+
+        query += """
+            GROUP BY
+                i.id, i.seller_id, i.category_id, i.title, i.description,
+                i.starting_price, i.reserve_price, i.bid_increment,
+                i.closes_at, i.created_at,
+                u.username, c.name
+            ORDER BY i.created_at DESC
+        """
+
+        with engine.connect() as conn:
+            result = conn.execute(text(query), params)
+            rows = result.fetchall()
+
+            items = [
+                {
+                    "id": row.id,
+                    "seller_id": row.seller_id,
+                    "category_id": row.category_id,
+                    "title": row.title,
+                    "description": row.description,
+                    "starting_price": float(row.starting_price),
+                    "reserve_price": float(row.reserve_price) if row.reserve_price is not None else None,
+                    "bid_increment": float(row.bid_increment),
+                    "closes_at": row.closes_at.isoformat(),
+                    "created_at": row.created_at.isoformat(),
+                    "status": row.status,
+                    "seller_username": row.seller_username,
+                    "category_name": row.category_name,
+                    "current_bid": float(row.current_bid),
+                    "bid_count": int(row.bid_count),
+                    "image_url": get_default_image(row.category_name)
+                }
+                for row in rows
+            ]
+
+        return jsonify(items), 200
+
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+@app.route("/stats", methods=["GET"])
+def get_stats():
+    try:
+        with engine.connect() as conn:
+            result = conn.execute(text("""
+                SELECT
+                    (SELECT COUNT(*) FROM items WHERE closes_at >= NOW()) AS active_auctions,
+                    (SELECT COUNT(*) FROM users WHERE role = 'seller') AS verified_sellers,
+                    (SELECT COUNT(*) FROM items) AS vehicles_listed
+            """))
+            row = result.fetchone()
+
+            stats = {
+                "active_auctions": int(row.active_auctions),
+                "verified_sellers": int(row.verified_sellers),
+                "vehicles_listed": int(row.vehicles_listed),
+            }
+
+        return jsonify(stats), 200
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 if __name__ == "__main__":
     app.run(debug=True, use_reloader=False)
