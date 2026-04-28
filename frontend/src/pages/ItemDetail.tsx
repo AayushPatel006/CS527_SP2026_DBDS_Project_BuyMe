@@ -8,7 +8,6 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Separator } from '@/components/ui/separator';
 import { Switch } from '@/components/ui/switch';
 import { Textarea } from '@/components/ui/textarea';
 import { Clock, TrendingUp, User, DollarSign } from 'lucide-react';
@@ -107,100 +106,101 @@ export default function ItemDetailPage() {
   const ended = item.status !== 'active' || new Date(item.closes_at) <= new Date();
 
   return (
-    <div className="container py-8">
+    <div className="container py-10 animate-fade-up">
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
         {/* Image & Details */}
-        <div className="lg:col-span-2 space-y-6">
-          <div className="aspect-video rounded-lg overflow-hidden bg-muted">
+        <div className="lg:col-span-2 space-y-7">
+          <div className="relative aspect-video overflow-hidden rounded-[2rem] border border-white/60 bg-white/50 shadow-[0_30px_90px_rgba(29,78,216,0.16)] backdrop-blur-2xl">
+            <div className="absolute inset-0 z-10 bg-gradient-to-t from-blue-950/35 via-transparent to-white/10" />
             {item.image_url ? (
               <img src={item.image_url} alt={item.title} className="h-full w-full object-cover" />
             ) : (
-              <div className="flex h-full items-center justify-center text-muted-foreground">No Image</div>
+              <div className="flex h-full items-center justify-center bg-gradient-to-br from-blue-50 to-sky-100 text-muted-foreground">No Image</div>
             )}
           </div>
 
-          <div>
-            <div className="flex items-center gap-2 mb-2">
-              <Badge>{item.category_name}</Badge>
-              <Badge variant={ended ? 'secondary' : 'outline'}>{ended ? 'Ended' : 'Active'}</Badge>
+          <div className="premium-card space-y-4">
+            <div className="flex items-center gap-2">
+              <Badge className="rounded-full bg-blue-100 px-3 py-1 text-blue-800">{item.category_name}</Badge>
+              <Badge variant={ended ? 'secondary' : 'outline'} className="rounded-full px-3 py-1">{ended ? 'Ended' : 'Active'}</Badge>
             </div>
-            <h1 className="font-heading text-2xl lg:text-3xl font-bold">{item.title}</h1>
-            <div className="flex items-center gap-4 mt-2 text-sm text-muted-foreground">
+
+            <h1 className="font-heading text-3xl lg:text-4xl font-extrabold tracking-tight text-blue-950">{item.title}</h1>
+
+            <div className="flex flex-wrap items-center gap-4 text-sm text-blue-900/60">
               <span className="flex items-center gap-1"><User className="h-4 w-4" />{item.seller_username}</span>
               <span className="flex items-center gap-1"><Clock className="h-4 w-4" />{timeLeft(item.closes_at)}</span>
             </div>
           </div>
 
-          <Separator />
-
-          <div>
-            <h2 className="font-heading text-lg font-semibold mb-2">Description</h2>
-            <p className="text-muted-foreground">{item.description}</p>
+          <div className="premium-section">
+            <h2 className="font-heading text-xl font-bold mb-3 text-blue-950">Description</h2>
+            <p className="text-blue-900/65 leading-relaxed">{item.description}</p>
           </div>
 
           {item.field_values && Object.keys(item.field_values).length > 0 && (
-            <>
-              <Separator />
-              <div>
-                <h2 className="font-heading text-lg font-semibold mb-3">Vehicle Details</h2>
-                <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-                  {Object.entries(item.field_values).map(([k, v]) => (
-                    <div key={k} className="rounded-lg bg-muted p-3">
-                      <p className="text-xs text-muted-foreground">{k}</p>
-                      <p className="font-medium">{v}</p>
-                    </div>
-                  ))}
-                </div>
+            <div className="premium-section">
+              <h2 className="font-heading text-xl font-bold mb-4 text-blue-950">Vehicle Details</h2>
+              <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+                {Object.entries(item.field_values).map(([k, v]) => (
+                  <div
+                    key={k}
+                    className="rounded-2xl border border-white/60 bg-white/55 p-4 shadow-sm backdrop-blur-xl"
+                  >
+                    <p className="text-xs font-medium text-blue-900/50">{k}</p>
+                    <p className="font-semibold text-blue-950">{v}</p>
+                  </div>
+                ))}
               </div>
-            </>
+            </div>
           )}
 
-          <Separator />
-
           {/* Bid History */}
-          <div>
-            <h2 className="font-heading text-lg font-semibold mb-3">Bid History ({bids.length})</h2>
+          <div className="premium-section overflow-hidden">
+            <h2 className="font-heading text-xl font-bold mb-4 text-blue-950">Bid History ({bids.length})</h2>
             {bids.length > 0 ? (
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Bidder</TableHead>
-                    <TableHead>Amount</TableHead>
-                    <TableHead>Type</TableHead>
-                    <TableHead>Time</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {bids.map(bid => (
-                    <TableRow key={bid.id}>
-                      <TableCell>{bid.bidder_username}</TableCell>
-                      <TableCell className="font-semibold">${bid.amount.toLocaleString()}</TableCell>
-                      <TableCell><Badge variant="outline">{bid.is_auto ? 'Auto' : 'Manual'}</Badge></TableCell>
-                      <TableCell className="text-muted-foreground text-sm">{new Date(bid.placed_at).toLocaleString()}</TableCell>
+              <div className="overflow-hidden rounded-2xl border border-white/60 bg-white/50 backdrop-blur-xl">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Bidder</TableHead>
+                      <TableHead>Amount</TableHead>
+                      <TableHead>Type</TableHead>
+                      <TableHead>Time</TableHead>
                     </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
+                  </TableHeader>
+                  <TableBody>
+                    {bids.map(bid => (
+                      <TableRow key={bid.id} className="hover:bg-blue-50/60">
+                        <TableCell>{bid.bidder_username}</TableCell>
+                        <TableCell className="font-semibold text-blue-700">${bid.amount.toLocaleString()}</TableCell>
+                        <TableCell><Badge variant="outline" className="rounded-full">{bid.is_auto ? 'Auto' : 'Manual'}</Badge></TableCell>
+                        <TableCell className="text-muted-foreground text-sm">{new Date(bid.placed_at).toLocaleString()}</TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
             ) : (
-              <p className="text-muted-foreground">No bids yet. Be the first!</p>
+              <p className="text-blue-900/55">No bids yet. Be the first!</p>
             )}
           </div>
         </div>
 
         {/* Bid Panel */}
-        <div className="space-y-4">
-          <Card>
+        <div className="space-y-5">
+          <Card className="premium-card">
             <CardHeader>
-              <CardTitle className="flex items-center gap-2">
+              <CardTitle className="flex items-center gap-2 text-blue-950">
                 <DollarSign className="h-5 w-5 text-primary" />
                 Current Bid
               </CardTitle>
             </CardHeader>
             <CardContent>
-              <p className="font-heading text-4xl font-bold text-primary">
+              <p className="font-heading text-5xl font-extrabold tracking-tight text-primary">
                 ${(item.current_bid || item.starting_price).toLocaleString()}
               </p>
-              <div className="flex items-center gap-1 mt-1 text-sm text-muted-foreground">
+              <div className="flex items-center gap-1 mt-2 text-sm text-blue-900/60">
                 <TrendingUp className="h-4 w-4" />
                 {item.bid_count || 0} bids · Min increment: ${item.bid_increment}
               </div>
@@ -209,11 +209,11 @@ export default function ItemDetailPage() {
                 <div className="mt-6 space-y-4">
                   <div className="space-y-2">
                     <Label htmlFor="bid">Your Bid ($)</Label>
-                    <Input id="bid" type="number" value={bidAmount} onChange={e => setBidAmount(e.target.value)} min={(item.current_bid || item.starting_price) + item.bid_increment} step={item.bid_increment} />
+                    <Input id="bid" type="number" value={bidAmount} onChange={e => setBidAmount(e.target.value)} min={(item.current_bid || item.starting_price) + item.bid_increment} step={item.bid_increment} className="premium-input" />
                   </div>
                   <div className="flex items-center justify-between">
                     <Label htmlFor="auto-bid">Enable Auto-Bid</Label>
-                    <Switch id="auto-bid" checked={autoBid} onCheckedChange={setAutoBid} />
+                    <Switch id="auto-bid" checked={autoBid} onCheckedChange={setAutoBid} className="shadow-none transition-none data-[state=checked]:bg-blue-800 data-[state=unchecked]:bg-gray-300 [&>span]:bg-white [&>span]:transition-none" />
                   </div>
                   {autoBid && (
                     <div className="space-y-2">
@@ -228,28 +228,28 @@ export default function ItemDetailPage() {
               )}
 
               {!isAuthenticated && !ended && (
-                <p className="mt-4 text-sm text-muted-foreground text-center">Sign in to place a bid</p>
+                <p className="mt-4 text-sm text-blue-900/55 text-center">Sign in to place a bid</p>
               )}
 
               {isAuthenticated && !ended && user?.id === item.seller_id && (
-                <p className="mt-4 text-sm text-muted-foreground text-center">You cannot bid on your own listing.</p>
+                <p className="mt-4 text-sm text-blue-900/55 text-center">You cannot bid on your own listing.</p>
               )}
 
               {ended && (
-                <div className="mt-4 rounded-lg bg-muted p-4 text-center">
-                  <p className="font-semibold">This auction has ended</p>
+                <div className="mt-4 rounded-2xl border border-white/60 bg-white/55 p-4 text-center backdrop-blur-xl">
+                  <p className="font-semibold text-blue-950">This auction has ended</p>
                 </div>
               )}
             </CardContent>
           </Card>
 
           {isAuthenticated && (user?.role === 'buyer' || user?.role === 'seller') && (
-            <Card>
+            <Card className="premium-card">
               <CardHeader>
-                <CardTitle>Ask a Representative</CardTitle>
+                <CardTitle className="text-blue-950">Ask a Representative</CardTitle>
               </CardHeader>
               <CardContent className="space-y-3">
-                <p className="text-sm text-muted-foreground">
+                <p className="text-sm text-blue-900/60">
                   Have a question about this auction? Send it to customer support.
                 </p>
                 <Textarea
@@ -257,8 +257,9 @@ export default function ItemDetailPage() {
                   onChange={e => setQuestionText(e.target.value)}
                   placeholder="Ask your question..."
                   rows={4}
+                  className="premium-input"
                 />
-                <Button className="w-full" onClick={handleAskQuestion} disabled={submittingQuestion || !questionText.trim()}>
+                <Button className="w-full glass-button" onClick={handleAskQuestion} disabled={submittingQuestion || !questionText.trim()}>
                   {submittingQuestion ? 'Sending...' : 'Send Question'}
                 </Button>
               </CardContent>

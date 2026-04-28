@@ -78,7 +78,8 @@ def insert_categories():
         (7, 'Sports Cars', 2, 'leaf'),
         (8, 'Pickup Trucks', 3, 'leaf'),
         (9, 'Cruisers', 4, 'leaf'),
-        (10, 'Sport Bikes', 4, 'leaf')
+        (10, 'Sport Bikes', 4, 'leaf'),
+        (11, 'Other', NULL, 'leaf')
     """)
 
     with engine.begin() as conn:

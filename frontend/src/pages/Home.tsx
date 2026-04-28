@@ -28,19 +28,19 @@ export default function HomePage() {
             <p className="text-lg text-primary-foreground/80 mb-8">
               BuyMe is the trusted vehicle auction marketplace. Browse cars, trucks, and motorcycles — bid with confidence.
             </p>
+
             <div className="flex gap-3">
               <Button size="lg" variant="secondary" asChild>
-                <Link to="/browse"><Search className="h-4 w-4 mr-2" />Browse Auctions</Link>
+                <Link to="/browse">
+                  <Search className="h-4 w-4 mr-2" />
+                  Browse Auctions
+                </Link>
               </Button>
-              <Button
-                size="lg"
-                className="group relative overflow-hidden rounded-xl border border-white/40 bg-blue-500/30 text-white font-bold backdrop-blur-xl shadow-[inset_0_1px_0_rgba(255,255,255,0.55),0_10px_30px_rgba(37,99,235,0.35)] transition-all duration-300 hover:bg-blue-500/40 hover:shadow-[inset_0_1px_0_rgba(255,255,255,0.65),0_14px_34px_rgba(37,99,235,0.45)]"
-                asChild
-              >
-                <Link to="/register?role=seller" className="relative flex items-center">
-                  <span className="pointer-events-none absolute inset-0 bg-[linear-gradient(120deg,rgba(255,255,255,0.45)_0%,rgba(255,255,255,0.08)_42%,rgba(255,255,255,0)_68%)] opacity-80 transition-opacity duration-300 group-hover:opacity-100" />
-                  <span className="relative">Start Selling</span>
-                  <ArrowRight className="relative h-4 w-4 ml-2" />
+
+              <Button size="lg" className="glass-button" asChild>
+                <Link to="/register?role=seller">
+                  Start Selling
+                  <ArrowRight className="h-4 w-4 ml-2" />
                 </Link>
               </Button>
             </div>
@@ -49,17 +49,34 @@ export default function HomePage() {
       </section>
 
       {/* Stats */}
-      <section className="border-b bg-card">
-        <div className="container grid grid-cols-3 divide-x py-8">
+      <section className="relative overflow-hidden border-b border-blue-200/50 bg-white/40 py-8 backdrop-blur-xl">
+        <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_0%,rgba(125,211,252,0.35),transparent_55%)]" />
+
+        <div className="container relative grid grid-cols-1 gap-5 sm:grid-cols-3">
           {[
             { icon: Gavel, label: 'Active Auctions', value: stats.active_auctions.toLocaleString() },
             { icon: Shield, label: 'Verified Sellers', value: stats.verified_sellers.toLocaleString() },
             { icon: Search, label: 'Vehicles Listed', value: stats.vehicles_listed.toLocaleString() },
           ].map(({ icon: Icon, label, value }) => (
-            <div key={label} className="text-center px-4">
-              <Icon className="h-6 w-6 mx-auto mb-2 text-primary" />
-              <p className="font-heading text-2xl font-bold">{value}</p>
-              <p className="text-sm text-muted-foreground">{label}</p>
+            <div
+              key={label}
+              className="group relative overflow-hidden rounded-3xl border border-white/60 bg-white/55 p-6 text-center shadow-[0_24px_70px_rgba(29,78,216,0.14)] backdrop-blur-2xl transition-all duration-500 hover:-translate-y-1.5 hover:shadow-[0_34px_95px_rgba(29,78,216,0.28)]"
+            >
+              <div className="absolute inset-0 bg-gradient-to-br from-white/70 via-white/25 to-blue-100/30" />
+              <div className="absolute -right-16 -top-16 h-36 w-36 rounded-full bg-sky-300/30 blur-3xl transition-all duration-500 group-hover:bg-sky-300/50" />
+              <div className="absolute inset-0 translate-x-[-130%] bg-[linear-gradient(120deg,transparent,rgba(255,255,255,0.78),transparent)] transition-transform duration-1000 group-hover:translate-x-[130%]" />
+
+              <div className="relative mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-br from-sky-300 via-blue-600 to-cyan-300 text-white shadow-[0_14px_42px_rgba(29,78,216,0.45)] transition-all duration-500 group-hover:scale-110 group-hover:shadow-[0_18px_55px_rgba(29,78,216,0.62)]">
+                <Icon className="h-6 w-6 transition-transform duration-500 group-hover:rotate-6 group-hover:scale-110" />
+              </div>
+
+              <p className="relative font-heading text-3xl font-extrabold tracking-tight text-blue-950">
+                {value}
+              </p>
+
+              <p className="relative mt-1 text-sm font-medium text-blue-900/60">
+                {label}
+              </p>
             </div>
           ))}
         </div>
@@ -69,12 +86,19 @@ export default function HomePage() {
       <section className="container py-12">
         <div className="flex items-center justify-between mb-8">
           <h2 className="font-heading text-2xl font-bold">Featured Auctions</h2>
+
           <Button variant="ghost" asChild>
-            <Link to="/browse">View all <ArrowRight className="h-4 w-4 ml-1" /></Link>
+            <Link to="/browse">
+              View all
+              <ArrowRight className="h-4 w-4 ml-1" />
+            </Link>
           </Button>
         </div>
+
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-          {featured.map(item => <ItemCard key={item.id} item={item} />)}
+          {featured.map(item => (
+            <ItemCard key={item.id} item={item} />
+          ))}
         </div>
       </section>
     </div>

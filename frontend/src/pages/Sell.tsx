@@ -39,12 +39,16 @@ export default function SellPage() {
 
   useEffect(() => {
     if (categoryId) {
+      setFieldValues({});
       api.categories.getFields(Number(categoryId))
         .then(setFields)
         .catch((err) => {
           const description = err instanceof Error ? err.message : 'Could not load category fields.';
           toast({ title: 'Failed to load fields', description, variant: 'destructive' });
         });
+    } else {
+      setFields([]);
+      setFieldValues({});
     }
   }, [categoryId, toast]);
 
