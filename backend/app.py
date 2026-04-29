@@ -3,6 +3,20 @@ from sqlalchemy import create_engine, text
 from sqlalchemy.exc import SQLAlchemyError, IntegrityError
 from datetime import datetime, timezone
 from werkzeug.security import check_password_hash, generate_password_hash
+import json
+import os
+import re
+from pathlib import Path
+from urllib import error as urllib_error
+from urllib import request as urllib_request
+from dotenv import load_dotenv
+
+
+BACKEND_DIR = Path(__file__).resolve().parent
+PROJECT_ROOT = BACKEND_DIR.parent
+
+load_dotenv(PROJECT_ROOT / ".env", override=True)
+load_dotenv(BACKEND_DIR / ".env", override=True)
 
 app = Flask(__name__)
 
@@ -19,6 +33,15 @@ DATABASE_URL = (
 )
 
 engine = create_engine(DATABASE_URL, pool_pre_ping=True)
+GEMINI_API_KEY = (os.getenv("GEMINI_API_KEY") or "").strip().strip('"').strip("'") or None
+GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-2.5-flash")
+masked_key = "No"
+if GEMINI_API_KEY:
+    suffix = GEMINI_API_KEY[-6:] if len(GEMINI_API_KEY) >= 6 else GEMINI_API_KEY
+    masked_key = f"Yes (...{suffix}, len={len(GEMINI_API_KEY)})"
+print(f"Gemini API Key Loaded: {'Yes' if GEMINI_API_KEY else 'No'}")
+print(f"Gemini Model Loaded: {'Yes' if GEMINI_MODEL else 'No'}")
+print(f"Gemini API Key Fingerprint: {masked_key}")
 
 
 def _to_float(value):
@@ -191,6 +214,318 @@ def _fetch_item_with_stats(conn, item_id):
         {"item_id": item_id},
     ).fetchone()
     return row
+
+
+def _fetch_active_items_for_assistant(conn):
+    rows = conn.execute(
+        text(
+            """
+            SELECT
+                i.id,
+                i.seller_id,
+                i.category_id,
+                i.title,
+                i.image_url,
+                i.description,
+                i.starting_price,
+                i.reserve_price,
+                i.bid_increment,
+                i.closes_at,
+                i.status,
+                i.created_at,
+                u.username AS seller_username,
+                c.name AS category_name,
+                MAX(b.amount) AS current_bid,
+                COUNT(b.id) AS bid_count
+            FROM items i
+            JOIN users u ON u.id = i.seller_id
+            JOIN category c ON c.id = i.category_id
+            LEFT JOIN bids b ON b.item_id = i.id AND b.removed_at IS NULL
+            WHERE i.status = 'active' AND i.closes_at > NOW()
+            GROUP BY
+                i.id, i.seller_id, i.category_id, i.title, i.description,
+                i.image_url, i.starting_price, i.reserve_price, i.bid_increment, i.closes_at,
+                i.status, i.created_at, u.username, c.name
+            ORDER BY i.closes_at ASC
+            """
+        )
+    ).fetchall()
+
+    items = []
+    for row in rows:
+        item = _serialize_item_row(row)
+        item["field_values"] = _fetch_item_field_values(conn, item["id"])
+        items.append(item)
+    return items
+
+
+def _assistant_extract_number(match):
+    if not match:
+        return None
+    try:
+        return float(match.group(1).replace(",", ""))
+    except (ValueError, IndexError):
+        return None
+
+
+def _assistant_extract_year(item):
+    field_year = (item.get("field_values") or {}).get("Year")
+    if field_year:
+        try:
+            return int(field_year)
+        except (TypeError, ValueError):
+            pass
+
+    title = item.get("title") or ""
+    match = re.search(r"\b(19\d{2}|20\d{2})\b", title)
+    if match:
+        return int(match.group(1))
+    return None
+
+
+def _assistant_parse_query(query_text):
+    text_value = (query_text or "").strip()
+    lowered = text_value.lower()
+
+    budget = None
+    for pattern in (
+        r"budget(?: of| is| around| up to)?\s*\$?([\d,]+(?:\.\d+)?)",
+        r"under\s+\$?([\d,]+(?:\.\d+)?)",
+        r"within\s+\$?([\d,]+(?:\.\d+)?)",
+        r"max(?:imum)?\s+\$?([\d,]+(?:\.\d+)?)",
+        r"\$([\d,]+(?:\.\d+)?)",
+    ):
+        match = re.search(pattern, lowered)
+        budget = _assistant_extract_number(match)
+        if budget is not None:
+            break
+
+    min_year = None
+    for pattern in (
+        r"not older(?:\s+older)?\s+th(?:an|at)\s+(19\d{2}|20\d{2})",
+        r"not older than\s+(19\d{2}|20\d{2})",
+        r"no older than\s+(19\d{2}|20\d{2})",
+        r"newer than\s+(19\d{2}|20\d{2})",
+        r"at least\s+(19\d{2}|20\d{2})",
+        r"from\s+(19\d{2}|20\d{2})",
+    ):
+        match = re.search(pattern, lowered)
+        if match:
+            min_year = int(match.group(1))
+            if "newer than" in pattern:
+                min_year += 1
+            break
+
+    category_map = {
+        "sedan": ["sedan", "sedans"],
+        "suv": ["suv", "suvs"],
+        "sports car": ["sports car", "sports cars"],
+        "pickup truck": ["pickup truck", "pickup trucks"],
+        "truck": ["truck", "trucks"],
+        "motorcycle": ["motorcycle", "motorcycles"],
+        "sport bike": ["sport bike", "sport bikes"],
+        "cruiser": ["cruiser", "cruisers"],
+        "car": ["car", "cars"],
+        "other": ["other"],
+    }
+
+    requested_categories = []
+    for canonical, aliases in category_map.items():
+        if any(alias in lowered for alias in aliases):
+            requested_categories.append(canonical)
+
+    return {
+        "query": text_value,
+        "budget": budget,
+        "min_year": min_year,
+        "categories": requested_categories,
+    }
+
+
+def _assistant_parse_query_with_gemini(query_text):
+    if not GEMINI_API_KEY:
+        raise RuntimeError("GEMINI_API_KEY is not configured on the backend")
+
+    prompt = (
+        "You extract bidding constraints from a user query for a vehicle auction site. "
+        "Return only structured JSON that follows the schema. "
+        "Interpret informal phrasing and minor typos. "
+        "Normalize category terms to short labels such as sedan, suv, sports car, pickup truck, truck, motorcycle, sport bike, cruiser, car, other. "
+        "If a value is missing, use 0 for numbers, false for booleans, and [] for arrays.\n\n"
+        f"User query: {query_text}"
+    )
+
+    request_body = {
+        "contents": [
+            {
+                "role": "user",
+                "parts": [{"text": prompt}],
+            }
+        ],
+        "generationConfig": {
+            "temperature": 0.1,
+            "responseMimeType": "application/json",
+            "responseSchema": {
+                "type": "object",
+                "properties": {
+                    "budgetMax": {"type": "number"},
+                    "minYear": {"type": "integer"},
+                    "categories": {
+                        "type": "array",
+                        "items": {"type": "string"},
+                    },
+                    "strictBudget": {"type": "boolean"},
+                    "intentSummary": {"type": "string"},
+                },
+                "required": ["budgetMax", "minYear", "categories", "strictBudget", "intentSummary"],
+            },
+        },
+    }
+
+    req = urllib_request.Request(
+        f"https://generativelanguage.googleapis.com/v1beta/models/{GEMINI_MODEL}:generateContent",
+        data=json.dumps(request_body).encode("utf-8"),
+        headers={
+            "Content-Type": "application/json",
+            "x-goog-api-key": GEMINI_API_KEY,
+        },
+        method="POST",
+    )
+
+    try:
+        with urllib_request.urlopen(req, timeout=20) as response:
+            payload = json.loads(response.read().decode("utf-8"))
+    except urllib_error.HTTPError as exc:
+        detail = exc.read().decode("utf-8", errors="ignore")
+        raise RuntimeError(f"Gemini API request failed: {detail or exc.reason}") from exc
+    except urllib_error.URLError as exc:
+        raise RuntimeError(f"Gemini API network error: {exc.reason}") from exc
+
+    candidates = payload.get("candidates") or []
+    if not candidates:
+        prompt_feedback = payload.get("promptFeedback") or {}
+        block_reason = prompt_feedback.get("blockReason")
+        if block_reason:
+            raise RuntimeError(f"Gemini blocked the request: {block_reason}")
+        raise RuntimeError("Gemini returned no candidates")
+
+    parts = ((candidates[0].get("content") or {}).get("parts")) or []
+    text_part = "".join(part.get("text", "") for part in parts if part.get("text"))
+    if not text_part:
+        raise RuntimeError("Gemini returned an empty response")
+
+    try:
+        extracted = json.loads(text_part)
+    except json.JSONDecodeError as exc:
+        raise RuntimeError("Gemini returned invalid JSON for assistant planning") from exc
+
+    categories = [str(value).strip().lower() for value in extracted.get("categories", []) if str(value).strip()]
+    budget_max = extracted.get("budgetMax") or 0
+    min_year = extracted.get("minYear") or 0
+
+    return {
+        "query": query_text.strip(),
+        "budget": float(budget_max) if budget_max else None,
+        "min_year": int(min_year) if min_year else None,
+        "categories": categories,
+        "strict_budget": bool(extracted.get("strictBudget")),
+        "summary": str(extracted.get("intentSummary") or "").strip(),
+    }
+
+
+def _assistant_score_item(item, intent):
+    text_blob = " ".join(
+        [
+            str(item.get("title") or ""),
+            str(item.get("description") or ""),
+            str(item.get("category_name") or ""),
+            " ".join(f"{k} {v}" for k, v in (item.get("field_values") or {}).items()),
+        ]
+    ).lower()
+
+    year = _assistant_extract_year(item)
+    min_bid = (item.get("current_bid") or item.get("starting_price") or 0) + (item.get("bid_increment") or 0)
+
+    meets_category = not intent["categories"]
+    matched_categories = []
+    if intent["categories"]:
+        for category in intent["categories"]:
+            if category in text_blob:
+                matched_categories.append(category)
+        meets_category = len(matched_categories) > 0
+
+    meets_year = intent["min_year"] is None or (year is not None and year >= intent["min_year"])
+    meets_budget = intent["budget"] is None or min_bid <= intent["budget"]
+
+    score = 0.0
+    if intent["categories"]:
+        score += 40 if meets_category else -35
+        score += min(10, len(matched_categories) * 5)
+    else:
+        score += 10
+
+    if intent["min_year"] is not None:
+        if meets_year:
+            score += 30
+        elif year is not None:
+            score -= 45 + max(0, intent["min_year"] - year) * 0.5
+        else:
+            score -= 12
+
+    if intent["budget"] is not None:
+        gap = intent["budget"] - min_bid
+        if gap >= 0:
+            score += 35
+            score += min(10, gap / 500)
+        else:
+            score -= min(45, abs(gap) / 200)
+    else:
+        score += 15
+
+    score += min(10, (item.get("bid_count") or 0) * 0.75)
+
+    return {
+        "score": score,
+        "min_bid": round(min_bid, 2),
+        "year": year,
+        "meets_category": meets_category,
+        "meets_year": meets_year,
+        "meets_budget": meets_budget,
+        "matched_categories": matched_categories,
+    }
+
+
+def _assistant_build_explanation(intent, match_info, item):
+    parts = []
+    quality = "exact" if (
+        match_info["meets_category"] and match_info["meets_year"] and match_info["meets_budget"]
+    ) else "closest"
+
+    if quality == "exact":
+        parts.append("This is the best live match for your request.")
+    else:
+        parts.append("This is the closest live match I found.")
+
+    if match_info["matched_categories"]:
+        pretty_categories = ", ".join(match_info["matched_categories"])
+        parts.append(f"It matches your requested type: {pretty_categories}.")
+
+    if intent["min_year"] is not None:
+        if match_info["year"] is not None and match_info["meets_year"]:
+            parts.append(f"It meets your year requirement with a {match_info['year']} model.")
+        elif match_info["year"] is not None:
+            parts.append(f"It is a {match_info['year']} model, so it misses your year target of {intent['min_year']}.")
+
+    if intent["budget"] is not None:
+        if match_info["meets_budget"]:
+            parts.append(f"The next valid bid is ${match_info['min_bid']:,.2f}, which fits within your ${intent['budget']:,.2f} budget.")
+        else:
+            parts.append(f"The next valid bid is ${match_info['min_bid']:,.2f}, which is above your ${intent['budget']:,.2f} budget.")
+    else:
+        parts.append(f"The next valid bid is ${match_info['min_bid']:,.2f}.")
+
+    parts.append(f"Recommended item: {item['title']}.")
+    return " ".join(parts), quality
 
 
 def get_user_ids():
@@ -1224,6 +1559,59 @@ def api_list_items():
             items = [_serialize_item_row(row) for row in rows]
 
         return jsonify(items), 200
+    except SQLAlchemyError as e:
+        return jsonify({"error": f"Database error: {str(e)}"}), 500
+
+
+@app.route("/api/assistant/bid-plan", methods=["POST"])
+def api_assistant_bid_plan():
+    payload = request.get_json(silent=True) or {}
+    query_text = (payload.get("query") or "").strip()
+
+    if not query_text:
+        return jsonify({"error": "query is required"}), 400
+
+    try:
+        with engine.connect() as conn:
+            items = _fetch_active_items_for_assistant(conn)
+
+        if not items:
+            return jsonify({"error": "No active auctions are available right now"}), 404
+
+        intent = _assistant_parse_query_with_gemini(query_text)
+        ranked = []
+        for item in items:
+            match_info = _assistant_score_item(item, intent)
+            ranked.append((item, match_info))
+
+        ranked.sort(
+            key=lambda entry: (
+                int(entry[1]["meets_category"]) + int(entry[1]["meets_year"]) + int(entry[1]["meets_budget"]),
+                entry[1]["score"],
+                -entry[1]["min_bid"],
+            ),
+            reverse=True,
+        )
+
+        best_item, best_match = ranked[0]
+        explanation, quality = _assistant_build_explanation(intent, best_match, best_item)
+
+        return jsonify(
+            {
+                "query": query_text,
+                "strategy": "gemini-assisted-agent",
+                "match_quality": quality,
+                "explanation": explanation,
+                "recommended_bid": best_match["min_bid"],
+                "budget": intent["budget"],
+                "min_year": intent["min_year"],
+                "categories": intent["categories"],
+                "intent_summary": intent.get("summary"),
+                "item": best_item,
+            }
+        ), 200
+    except RuntimeError as e:
+        return jsonify({"error": str(e)}), 503
     except SQLAlchemyError as e:
         return jsonify({"error": f"Database error: {str(e)}"}), 500
 

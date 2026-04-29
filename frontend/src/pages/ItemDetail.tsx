@@ -1,8 +1,8 @@
 import { useState, useEffect } from 'react';
-import { useParams } from 'react-router-dom';
+import { useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { api } from '@/lib/api';
 import { useAuth } from '@/contexts/AuthContext';
-import type { Item, Bid } from '@/types';
+import type { AssistantBidPlan, Item, Bid } from '@/types';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -10,9 +10,11 @@ import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Switch } from '@/components/ui/switch';
 import { Textarea } from '@/components/ui/textarea';
-import { Clock, TrendingUp, User, DollarSign } from 'lucide-react';
+import { Clock, Sparkles, TrendingUp, User, DollarSign } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+
+const ASSISTANT_STORAGE_KEY = 'buyme_assistant_plan';
 
 function timeLeft(closesAt: string): string {
   const diff = new Date(closesAt).getTime() - Date.now();
@@ -25,11 +27,16 @@ function timeLeft(closesAt: string): string {
 
 export default function ItemDetailPage() {
   const { id } = useParams<{ id: string }>();
+  const location = useLocation();
+  const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const [item, setItem] = useState<Item | null>(null);
   const [bids, setBids] = useState<Bid[]>([]);
   const [bidAmount, setBidAmount] = useState('');
   const [autoBid, setAutoBid] = useState(false);
   const [autoBidLimit, setAutoBidLimit] = useState('');
+  const [assistantPlan, setAssistantPlan] = useState<AssistantBidPlan | null>(null);
+  const [confirmingAssistantBid, setConfirmingAssistantBid] = useState(false);
   const [questionText, setQuestionText] = useState('');
   const [submittingQuestion, setSubmittingQuestion] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -52,30 +59,87 @@ export default function ItemDetailPage() {
       .finally(() => setLoading(false));
   }, [id, toast]);
 
-  const handleBid = async () => {
+  useEffect(() => {
+    const itemId = Number(id);
+    const statePlan = (location.state as { assistantPlan?: AssistantBidPlan } | null)?.assistantPlan;
+
+    if (statePlan?.item?.id === itemId) {
+      setAssistantPlan(statePlan);
+      sessionStorage.setItem(ASSISTANT_STORAGE_KEY, JSON.stringify(statePlan));
+      return;
+    }
+
+    if (searchParams.get('assistant') !== '1') {
+      setAssistantPlan(null);
+      return;
+    }
+
+    const rawPlan = sessionStorage.getItem(ASSISTANT_STORAGE_KEY);
+    if (!rawPlan) return;
+
+    try {
+      const parsedPlan = JSON.parse(rawPlan) as AssistantBidPlan;
+      if (parsedPlan.item.id === itemId) {
+        setAssistantPlan(parsedPlan);
+      }
+    } catch {
+      sessionStorage.removeItem(ASSISTANT_STORAGE_KEY);
+    }
+  }, [id, location.state, searchParams]);
+
+  useEffect(() => {
+    if (!assistantPlan || !item) return;
+    const minBid = (item.current_bid || item.starting_price) + item.bid_increment;
+    setBidAmount(String(Math.max(assistantPlan.recommended_bid, minBid)));
+  }, [assistantPlan, item]);
+
+  const submitBid = async (options?: { amount?: number; autoBidLimit?: number; isAuto?: boolean }) => {
     if (!item) return;
     if (user?.id === item.seller_id) {
       toast({ title: 'Cannot bid', description: 'You cannot bid on your own listing.', variant: 'destructive' });
       return;
     }
-    const amount = Number(bidAmount);
-    const parsedAutoBidLimit = autoBid ? Number(autoBidLimit) : undefined;
+    const amount = options?.amount ?? Number(bidAmount);
+    const shouldUseAutoBid = options?.isAuto ?? autoBid;
+    const parsedAutoBidLimit = shouldUseAutoBid ? (options?.autoBidLimit ?? Number(autoBidLimit)) : undefined;
     const minBid = (item.current_bid || item.starting_price) + item.bid_increment;
     if (amount < minBid) {
       toast({ title: 'Bid too low', description: `Minimum bid is $${minBid.toLocaleString()}`, variant: 'destructive' });
       return;
     }
-    if (autoBid && (!parsedAutoBidLimit || Number.isNaN(parsedAutoBidLimit) || parsedAutoBidLimit < amount)) {
+    if (shouldUseAutoBid && (!parsedAutoBidLimit || Number.isNaN(parsedAutoBidLimit) || parsedAutoBidLimit < amount)) {
       toast({ title: 'Invalid auto-bid limit', description: 'Set a maximum that is at least your current bid amount.', variant: 'destructive' });
       return;
     }
     try {
-      const bid = await api.bids.place(item.id, amount, parsedAutoBidLimit, autoBid);
+      const bid = await api.bids.place(item.id, amount, parsedAutoBidLimit, shouldUseAutoBid);
       setBids(prev => [bid, ...prev]);
+      setBidAmount(String(amount + item.bid_increment));
       toast({ title: 'Bid placed!', description: `Your bid of $${amount.toLocaleString()} was placed successfully.` });
+      return true;
     } catch (err) {
       const description = err instanceof Error ? err.message : 'Unknown error while placing bid.';
       toast({ title: 'Bid failed', description, variant: 'destructive' });
+      return false;
+    }
+  };
+
+  const handleBid = async () => {
+    await submitBid();
+  };
+
+  const handleAssistantBid = async () => {
+    if (!assistantPlan) return;
+    setConfirmingAssistantBid(true);
+    try {
+      const placed = await submitBid({ amount: assistantPlan.recommended_bid, isAuto: false });
+      if (placed) {
+        setAssistantPlan(null);
+        sessionStorage.removeItem(ASSISTANT_STORAGE_KEY);
+        navigate(`/item/${assistantPlan.item.id}`, { replace: true });
+      }
+    } finally {
+      setConfirmingAssistantBid(false);
     }
   };
 
@@ -110,6 +174,45 @@ export default function ItemDetailPage() {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
         {/* Image & Details */}
         <div className="lg:col-span-2 space-y-7">
+          {assistantPlan && (
+            <Card className="premium-card border-blue-200/70">
+              <CardContent className="flex flex-col gap-4 p-6">
+                <div className="flex items-start gap-3">
+                  <div className="mt-0.5 rounded-2xl bg-blue-100 p-2 text-blue-700">
+                    <Sparkles className="h-5 w-5" />
+                  </div>
+                  <div className="space-y-2">
+                    <p className="font-heading text-xl font-bold text-blue-950">
+                      Assistant picked this auction for you
+                    </p>
+                    <p className="text-sm text-blue-900/70">
+                      “{assistantPlan.query}”
+                    </p>
+                    <p className="text-sm text-blue-900/70">
+                      {assistantPlan.explanation}
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                  <div className="text-sm text-blue-900/70">
+                    Suggested confirmation bid: <span className="font-semibold text-blue-950">${assistantPlan.recommended_bid.toLocaleString()}</span>
+                  </div>
+
+                  {isAuthenticated && !ended && user?.role !== 'admin' && user?.role !== 'rep' && user?.id !== item?.seller_id ? (
+                    <Button className="glass-button" onClick={handleAssistantBid} disabled={confirmingAssistantBid}>
+                      {confirmingAssistantBid ? 'Placing bid...' : `Confirm and Bid $${assistantPlan.recommended_bid.toLocaleString()}`}
+                    </Button>
+                  ) : (
+                    <div className="text-sm text-blue-900/60">
+                      {isAuthenticated ? 'This account cannot place the suggested bid on this auction.' : 'Sign in to confirm the suggested bid.'}
+                    </div>
+                  )}
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
           <div className="relative aspect-video overflow-hidden rounded-[2rem] border border-white/60 bg-white/50 shadow-[0_30px_90px_rgba(29,78,216,0.16)] backdrop-blur-2xl">
             <div className="absolute inset-0 z-10 bg-gradient-to-t from-blue-950/35 via-transparent to-white/10" />
             {item.image_url ? (

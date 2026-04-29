@@ -112,3 +112,15 @@ export interface AuthState {
   user: User | null;
   isAuthenticated: boolean;
 }
+
+export interface AssistantBidPlan {
+  query: string;
+  strategy: string;
+  match_quality: 'exact' | 'closest';
+  explanation: string;
+  recommended_bid: number;
+  budget?: number;
+  min_year?: number;
+  categories: string[];
+  item: Item;
+}

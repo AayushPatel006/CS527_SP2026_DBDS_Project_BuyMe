@@ -5,7 +5,7 @@
  */
 
 import { mockNotifications } from './mock-data';
-import type { User, Item, Bid, Category, CategoryField, Question, Notification, Alert, AuthState } from '@/types';
+import type { User, Item, Bid, Category, CategoryField, Question, Notification, Alert, AuthState, AssistantBidPlan } from '@/types';
 
 const API_BASE = import.meta.env.VITE_API_URL || '/api';
 
@@ -157,6 +157,21 @@ export const api = {
         throw new Error(data?.error || 'Failed to load home stats');
       }
       return data as { active_auctions: number; verified_sellers: number; vehicles_listed: number };
+    },
+  },
+
+  assistant: {
+    async planBid(query: string): Promise<AssistantBidPlan> {
+      const response = await fetch(`${API_BASE}/assistant/bid-plan`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ query }),
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        throw new Error(data?.error || 'Failed to plan bid');
+      }
+      return data as AssistantBidPlan;
     },
   },
 
