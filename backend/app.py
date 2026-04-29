@@ -2063,6 +2063,22 @@ def api_list_item_bids(item_id):
                 if not bidder_row.is_active:
                     return jsonify({"error": "Bidder account is inactive"}), 400
 
+                latest_bid_row = conn.execute(
+                    text(
+                        """
+                        SELECT bidder_id
+                        FROM bids
+                        WHERE item_id = :item_id
+                          AND removed_at IS NULL
+                        ORDER BY placed_at DESC, id DESC
+                        LIMIT 1
+                        """
+                    ),
+                    {"item_id": item_id},
+                ).fetchone()
+                if latest_bid_row and latest_bid_row.bidder_id == bidder_id:
+                    return jsonify({"error": "You cannot place two consecutive bids on the same auction"}), 400
+
                 current_bid = _to_float(item_row.current_bid)
                 starting_price = _to_float(item_row.starting_price) or 0.0
                 bid_increment = _to_float(item_row.bid_increment) or 0.0

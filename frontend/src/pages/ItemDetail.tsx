@@ -168,6 +168,13 @@ export default function ItemDetailPage() {
   if (!item) return <div className="container py-16 text-center text-muted-foreground">Item not found</div>;
 
   const ended = item.status !== 'active' || new Date(item.closes_at) <= new Date();
+  const latestBid = bids.reduce<Bid | null>((latest, bid) => {
+    if (!latest) return bid;
+    const latestTime = latest.placed_at ? new Date(latest.placed_at).getTime() : 0;
+    const bidTime = bid.placed_at ? new Date(bid.placed_at).getTime() : 0;
+    return bidTime > latestTime ? bid : latest;
+  }, null);
+  const isLatestBidByCurrentUser = !!user && latestBid?.bidder_id === user.id;
 
   return (
     <div className="container py-10 animate-fade-up">
@@ -200,7 +207,7 @@ export default function ItemDetailPage() {
                   </div>
 
                   {isAuthenticated && !ended && user?.role !== 'admin' && user?.role !== 'rep' && user?.id !== item?.seller_id ? (
-                    <Button className="glass-button" onClick={handleAssistantBid} disabled={confirmingAssistantBid}>
+                    <Button className="glass-button" onClick={handleAssistantBid} disabled={confirmingAssistantBid || isLatestBidByCurrentUser}>
                       {confirmingAssistantBid ? 'Placing bid...' : `Confirm and Bid $${assistantPlan.recommended_bid.toLocaleString()}`}
                     </Button>
                   ) : (
@@ -209,6 +216,11 @@ export default function ItemDetailPage() {
                     </div>
                   )}
                 </div>
+                {isLatestBidByCurrentUser && (
+                  <p className="text-sm text-blue-900/60">
+                    Your bid is already the latest bid on this auction. Another user must bid before you can bid again.
+                  </p>
+                )}
               </CardContent>
             </Card>
           )}
@@ -324,9 +336,14 @@ export default function ItemDetailPage() {
                       <Input id="limit" type="number" value={autoBidLimit} onChange={e => setAutoBidLimit(e.target.value)} placeholder="Your secret maximum" />
                     </div>
                   )}
-                  <Button className="w-full" size="lg" onClick={handleBid}>
+                  <Button className="w-full" size="lg" onClick={handleBid} disabled={isLatestBidByCurrentUser}>
                     Place Bid
                   </Button>
+                  {isLatestBidByCurrentUser && (
+                    <p className="text-sm text-blue-900/60 text-center">
+                      Your bid is already the latest bid on this auction. Wait for another bidder before bidding again.
+                    </p>
+                  )}
                 </div>
               )}
 
