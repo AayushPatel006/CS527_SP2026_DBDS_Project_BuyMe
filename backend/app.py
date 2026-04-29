@@ -216,6 +216,152 @@ def _fetch_item_with_stats(conn, item_id):
     return row
 
 
+def _fetch_latest_bid_row(conn, item_id):
+    return conn.execute(
+        text(
+            """
+            SELECT
+                b.id,
+                b.item_id,
+                b.bidder_id,
+                b.amount,
+                b.auto_bid_limit,
+                b.is_auto,
+                b.placed_at,
+                b.removed_by,
+                b.removed_at,
+                u.username AS bidder_username
+            FROM bids b
+            JOIN users u ON u.id = b.bidder_id
+            WHERE b.item_id = :item_id
+              AND b.removed_at IS NULL
+            ORDER BY b.placed_at DESC, b.id DESC
+            LIMIT 1
+            """
+        ),
+        {"item_id": item_id},
+    ).fetchone()
+
+
+def _fetch_active_auto_bid_profiles(conn, item_id):
+    rows = conn.execute(
+        text(
+            """
+            SELECT
+                latest.id,
+                latest.item_id,
+                latest.bidder_id,
+                latest.amount,
+                latest.auto_bid_limit,
+                latest.is_auto,
+                latest.placed_at,
+                latest.removed_by,
+                latest.removed_at,
+                u.username AS bidder_username
+            FROM bids latest
+            JOIN (
+                SELECT bidder_id, MAX(id) AS latest_bid_id
+                FROM bids
+                WHERE item_id = :item_id
+                  AND removed_at IS NULL
+                GROUP BY bidder_id
+            ) recent ON recent.latest_bid_id = latest.id
+            JOIN users u ON u.id = latest.bidder_id
+            WHERE latest.auto_bid_limit IS NOT NULL
+            """
+        ),
+        {"item_id": item_id},
+    ).fetchall()
+    return rows
+
+
+def _apply_auto_bid_response(conn, item_id, bid_increment):
+    latest_bid = _fetch_latest_bid_row(conn, item_id)
+    if not latest_bid:
+        return None
+
+    next_minimum = _to_float(latest_bid.amount) + bid_increment
+    profiles = _fetch_active_auto_bid_profiles(conn, item_id)
+
+    eligible_profiles = []
+    for profile in profiles:
+        profile_limit = _to_float(profile.auto_bid_limit)
+        if profile.bidder_id == latest_bid.bidder_id:
+            continue
+        if profile_limit is None or profile_limit < next_minimum:
+            continue
+        eligible_profiles.append(profile)
+
+    if not eligible_profiles:
+        return None
+
+    eligible_profiles.sort(
+        key=lambda profile: (
+            _to_float(profile.auto_bid_limit) or 0.0,
+            profile.placed_at.timestamp() if profile.placed_at else 0.0,
+            profile.id,
+        ),
+        reverse=True,
+    )
+    responder = eligible_profiles[0]
+    response_amount = min(_to_float(responder.auto_bid_limit), next_minimum)
+
+    if response_amount < next_minimum:
+        return None
+
+    insert_result = conn.execute(
+        text(
+            """
+            INSERT INTO bids (item_id, bidder_id, amount, auto_bid_limit, is_auto)
+            VALUES (:item_id, :bidder_id, :amount, :auto_bid_limit, TRUE)
+            """
+        ),
+        {
+            "item_id": item_id,
+            "bidder_id": responder.bidder_id,
+            "amount": response_amount,
+            "auto_bid_limit": _to_float(responder.auto_bid_limit),
+        },
+    )
+
+    return conn.execute(
+        text(
+            """
+            SELECT
+                b.id,
+                b.item_id,
+                b.bidder_id,
+                b.amount,
+                b.auto_bid_limit,
+                b.is_auto,
+                b.placed_at,
+                b.removed_by,
+                b.removed_at,
+                u.username AS bidder_username
+            FROM bids b
+            JOIN users u ON u.id = b.bidder_id
+            WHERE b.id = :bid_id
+            """
+        ),
+        {"bid_id": insert_result.lastrowid},
+    ).fetchone()
+
+
+def _serialize_bid_row(row):
+    return {
+        "id": row.id,
+        "item_id": row.item_id,
+        "bidder_id": row.bidder_id,
+        "amount": _to_float(row.amount),
+        "auto_bid_limit": _to_float(row.auto_bid_limit),
+        "is_auto": bool(row.is_auto),
+        "placed_at": row.placed_at.isoformat() if row.placed_at else None,
+        "removed_by": row.removed_by,
+        "removed_at": row.removed_at.isoformat() if row.removed_at else None,
+        "bidder_username": row.bidder_username,
+    }
+
+
 def _fetch_active_items_for_assistant(conn):
     rows = conn.execute(
         text(
@@ -2063,19 +2209,7 @@ def api_list_item_bids(item_id):
                 if not bidder_row.is_active:
                     return jsonify({"error": "Bidder account is inactive"}), 400
 
-                latest_bid_row = conn.execute(
-                    text(
-                        """
-                        SELECT bidder_id
-                        FROM bids
-                        WHERE item_id = :item_id
-                          AND removed_at IS NULL
-                        ORDER BY placed_at DESC, id DESC
-                        LIMIT 1
-                        """
-                    ),
-                    {"item_id": item_id},
-                ).fetchone()
+                latest_bid_row = _fetch_latest_bid_row(conn, item_id)
                 if latest_bid_row and latest_bid_row.bidder_id == bidder_id:
                     return jsonify({"error": "You cannot place two consecutive bids on the same auction"}), 400
 
@@ -2129,24 +2263,13 @@ def api_list_item_bids(item_id):
                         ),
                         {"bid_id": new_bid_id},
                     ).fetchone()
+                    if not is_auto:
+                        _apply_auto_bid_response(tx_conn, item_id, bid_increment)
 
                 if not new_bid_row:
                     return jsonify({"error": "Failed to create bid"}), 500
 
-                new_bid = {
-                    "id": new_bid_row.id,
-                    "item_id": new_bid_row.item_id,
-                    "bidder_id": new_bid_row.bidder_id,
-                    "amount": _to_float(new_bid_row.amount),
-                    "auto_bid_limit": _to_float(new_bid_row.auto_bid_limit),
-                    "is_auto": bool(new_bid_row.is_auto),
-                    "placed_at": new_bid_row.placed_at.isoformat() if new_bid_row.placed_at else None,
-                    "removed_by": new_bid_row.removed_by,
-                    "removed_at": new_bid_row.removed_at.isoformat() if new_bid_row.removed_at else None,
-                    "bidder_username": new_bid_row.bidder_username,
-                }
-
-                return jsonify(new_bid), 201
+                return jsonify(_serialize_bid_row(new_bid_row)), 201
 
             bid_rows = conn.execute(
                 text(
@@ -2172,21 +2295,7 @@ def api_list_item_bids(item_id):
                 {"item_id": item_id},
             ).fetchall()
 
-            bids = [
-                {
-                    "id": row.id,
-                    "item_id": row.item_id,
-                    "bidder_id": row.bidder_id,
-                    "amount": _to_float(row.amount),
-                    "auto_bid_limit": _to_float(row.auto_bid_limit),
-                    "is_auto": bool(row.is_auto),
-                    "placed_at": row.placed_at.isoformat() if row.placed_at else None,
-                    "removed_by": row.removed_by,
-                    "removed_at": row.removed_at.isoformat() if row.removed_at else None,
-                    "bidder_username": row.bidder_username,
-                }
-                for row in bid_rows
-            ]
+            bids = [_serialize_bid_row(row) for row in bid_rows]
 
         return jsonify(bids), 200
     except SQLAlchemyError as e:

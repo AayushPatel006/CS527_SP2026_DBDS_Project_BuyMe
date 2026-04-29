@@ -43,12 +43,20 @@ export default function ItemDetailPage() {
   const { user, isAuthenticated } = useAuth();
   const { toast } = useToast();
 
+  const refreshAuctionState = async (itemId: number) => {
+    const [latestItem, latestBids] = await Promise.all([
+      api.items.get(itemId),
+      api.bids.listByItem(itemId),
+    ]);
+    setItem(latestItem);
+    setBids(latestBids);
+    return { latestItem, latestBids };
+  };
+
   useEffect(() => {
     if (!id) return;
-    Promise.all([api.items.get(Number(id)), api.bids.listByItem(Number(id))])
-      .then(([item, bids]) => {
-        setItem(item);
-        setBids(bids);
+    refreshAuctionState(Number(id))
+      .then(({ latestItem: item, latestBids: bids }) => {
         setBidAmount(String((item.current_bid || item.starting_price) + item.bid_increment));
       })
       .catch(() => {
@@ -112,10 +120,24 @@ export default function ItemDetailPage() {
       return;
     }
     try {
-      const bid = await api.bids.place(item.id, amount, parsedAutoBidLimit, shouldUseAutoBid);
-      setBids(prev => [bid, ...prev]);
-      setBidAmount(String(amount + item.bid_increment));
-      toast({ title: 'Bid placed!', description: `Your bid of $${amount.toLocaleString()} was placed successfully.` });
+      await api.bids.place(item.id, amount, parsedAutoBidLimit, false);
+      const { latestItem, latestBids } = await refreshAuctionState(item.id);
+      const latestBid = latestBids.reduce<Bid | null>((latest, currentBid) => {
+        if (!latest) return currentBid;
+        const latestTime = latest.placed_at ? new Date(latest.placed_at).getTime() : 0;
+        const currentTime = currentBid.placed_at ? new Date(currentBid.placed_at).getTime() : 0;
+        return currentTime > latestTime ? currentBid : latest;
+      }, null);
+      setBidAmount(String((latestItem.current_bid || latestItem.starting_price) + latestItem.bid_increment));
+
+      if (latestBid?.bidder_id === user?.id) {
+        toast({ title: 'Bid placed!', description: `Your bid of $${amount.toLocaleString()} is now the latest bid.` });
+      } else {
+        toast({
+          title: 'Bid placed, then auto-bid responded',
+          description: `Your bid of $${amount.toLocaleString()} was placed, but another bidder's auto-bid immediately answered it.`,
+        });
+      }
       return true;
     } catch (err) {
       const description = err instanceof Error ? err.message : 'Unknown error while placing bid.';
