@@ -1,7 +1,7 @@
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
-import { Bell, LogOut, User, Shield, Search, Sparkles } from 'lucide-react';
+import { Bell, LogOut, User, Shield } from 'lucide-react';
 import { useState } from 'react';
 import { Input } from '@/components/ui/input';
 
@@ -24,14 +24,18 @@ export default function Navbar() {
         >
           <span className="relative flex h-10 w-10 items-center justify-center overflow-hidden rounded-2xl bg-gradient-to-br from-sky-300 via-blue-700 to-cyan-300 text-white shadow-[0_14px_42px_rgba(29,78,216,0.45)]">
             <span className="absolute inset-0 translate-x-[-120%] bg-[linear-gradient(120deg,transparent,rgba(255,255,255,0.85),transparent)] transition-transform duration-700 group-hover:translate-x-[120%]" />
-            <Sparkles className="relative h-5 w-5 drop-shadow-md" />
+            <img
+              src="/favicon.ico"
+              alt="BuyMe"
+              className="relative h-6 w-6 rounded-md object-contain drop-shadow-md"
+            />
           </span>
 
           <span className="font-heading text-xl font-extrabold tracking-tight">
             <span className="bg-gradient-to-r from-blue-950 via-blue-700 to-cyan-400 bg-clip-text text-transparent">
-              Buy
+              Motor
             </span>
-            <span className="text-blue-950">Me</span>
+            <span className="text-blue-950">AuctionX</span>
           </span>
         </Link>
 
