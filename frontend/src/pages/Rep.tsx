@@ -18,8 +18,13 @@ export default function RepPage() {
   const [answers, setAnswers] = useState<Record<number, string>>({});
 
   useEffect(() => {
-    api.questions.list().then(setQuestions);
-  }, []);
+    api.questions.list()
+      .then(setQuestions)
+      .catch((err: unknown) => {
+        const description = err instanceof Error ? err.message : 'Failed to load questions';
+        toast({ title: 'Failed to load questions', description, variant: 'destructive' });
+      });
+  }, [toast]);
 
   if (user?.role !== 'rep' && user?.role !== 'admin') return <div className="container py-16 text-center text-muted-foreground">Access denied</div>;
 
@@ -32,9 +37,11 @@ export default function RepPage() {
     try {
       const updated = await api.questions.answer(qId, text);
       setQuestions(prev => prev.map(q => q.id === qId ? updated : q));
+      setAnswers(prev => ({ ...prev, [qId]: '' }));
       toast({ title: 'Answer submitted' });
-    } catch {
-      toast({ title: 'Failed', variant: 'destructive' });
+    } catch (err) {
+      const description = err instanceof Error ? err.message : 'Failed to submit answer';
+      toast({ title: 'Failed', description, variant: 'destructive' });
     }
   };
 
@@ -68,6 +75,9 @@ export default function RepPage() {
                     </div>
                   </CardHeader>
                   <CardContent className="space-y-3">
+                    <p className="text-sm text-muted-foreground">
+                      Product: {q.item_title || 'General support question'}
+                    </p>
                     <p className="bg-muted p-3 rounded-lg">{q.question_text}</p>
                     <Textarea
                       placeholder="Type your answer..."
@@ -85,12 +95,13 @@ export default function RepPage() {
         <TabsContent value="answered">
           <Table>
             <TableHeader>
-              <TableRow><TableHead>User</TableHead><TableHead>Question</TableHead><TableHead>Answer</TableHead><TableHead>Answered By</TableHead></TableRow>
+              <TableRow><TableHead>User</TableHead><TableHead>Product</TableHead><TableHead>Question</TableHead><TableHead>Answer</TableHead><TableHead>Answered By</TableHead></TableRow>
             </TableHeader>
             <TableBody>
               {answered.map(q => (
                 <TableRow key={q.id}>
                   <TableCell>{q.user_username}</TableCell>
+                  <TableCell>{q.item_title || 'General'}</TableCell>
                   <TableCell className="max-w-xs truncate">{q.question_text}</TableCell>
                   <TableCell className="max-w-xs truncate">{q.answer_text}</TableCell>
                   <TableCell>{q.rep_username}</TableCell>

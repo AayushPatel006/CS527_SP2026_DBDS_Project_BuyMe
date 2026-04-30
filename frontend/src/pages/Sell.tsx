@@ -19,6 +19,7 @@ export default function SellPage() {
   const [fields, setFields] = useState<CategoryField[]>([]);
   const [categoryId, setCategoryId] = useState('');
   const [title, setTitle] = useState('');
+  const [imageUrl, setImageUrl] = useState('');
   const [description, setDescription] = useState('');
   const [startingPrice, setStartingPrice] = useState('');
   const [reservePrice, setReservePrice] = useState('');
@@ -28,14 +29,28 @@ export default function SellPage() {
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
-    api.categories.list().then(setCategories);
+    api.categories.list()
+      .then(setCategories)
+      .catch((err) => {
+        const description = err instanceof Error ? err.message : 'Could not load categories.';
+        toast({ title: 'Failed to load categories', description, variant: 'destructive' });
+      });
   }, []);
 
   useEffect(() => {
     if (categoryId) {
-      api.categories.getFields(Number(categoryId)).then(setFields);
+      setFieldValues({});
+      api.categories.getFields(Number(categoryId))
+        .then(setFields)
+        .catch((err) => {
+          const description = err instanceof Error ? err.message : 'Could not load category fields.';
+          toast({ title: 'Failed to load fields', description, variant: 'destructive' });
+        });
+    } else {
+      setFields([]);
+      setFieldValues({});
     }
-  }, [categoryId]);
+  }, [categoryId, toast]);
 
   const leafCategories = categories.filter(c => c.level === 'leaf');
 
@@ -47,6 +62,7 @@ export default function SellPage() {
         seller_id: user!.id,
         category_id: Number(categoryId),
         title, description,
+        image_url: imageUrl.trim() || undefined,
         starting_price: Number(startingPrice),
         reserve_price: reservePrice ? Number(reservePrice) : undefined,
         bid_increment: Number(bidIncrement),
@@ -55,8 +71,9 @@ export default function SellPage() {
       });
       toast({ title: 'Auction created!', description: 'Your item has been listed.' });
       navigate('/browse');
-    } catch {
-      toast({ title: 'Failed to create auction', variant: 'destructive' });
+    } catch (err) {
+      const description = err instanceof Error ? err.message : 'Unknown error while creating auction.';
+      toast({ title: 'Failed to create auction', description, variant: 'destructive' });
     } finally {
       setLoading(false);
     }
@@ -81,6 +98,15 @@ export default function SellPage() {
             <div className="space-y-2">
               <Label>Title</Label>
               <Input value={title} onChange={e => setTitle(e.target.value)} placeholder="e.g., 2022 Toyota Camry SE" required />
+            </div>
+            <div className="space-y-2">
+              <Label>Image URL <span className="text-muted-foreground text-xs">(optional)</span></Label>
+              <Input
+                type="url"
+                value={imageUrl}
+                onChange={e => setImageUrl(e.target.value)}
+                placeholder="https://example.com/vehicle.jpg"
+              />
             </div>
             <div className="space-y-2">
               <Label>Description</Label>

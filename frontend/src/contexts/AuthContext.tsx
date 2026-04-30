@@ -4,7 +4,7 @@ import type { User, AuthState } from '@/types';
 
 interface AuthContextType extends AuthState {
   login: (username: string, password: string) => Promise<void>;
-  register: (username: string, email: string, password: string) => Promise<void>;
+  register: (username: string, email: string, password: string, role?: 'buyer' | 'seller') => Promise<void>;
   logout: () => void;
 }
 
@@ -23,8 +23,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setState({ user, isAuthenticated: true });
   };
 
-  const register = async (username: string, email: string, password: string) => {
-    const user = await api.auth.register(username, email, password);
+  const register = async (username: string, email: string, password: string, role: 'buyer' | 'seller' = 'buyer') => {
+    const user = await api.auth.register(username, email, password, role);
     setState({ user, isAuthenticated: true });
   };
 

@@ -41,6 +41,7 @@ CREATE TABLE items (
     seller_id       INT NOT NULL,
     category_id     INT NOT NULL,
     title           VARCHAR(255) NOT NULL,
+    image_url       VARCHAR(1024) DEFAULT NULL,
     description     TEXT,
     starting_price  DECIMAL(12,2) NOT NULL,
     reserve_price   DECIMAL(12,2) DEFAULT NULL,   -- hidden from buyers

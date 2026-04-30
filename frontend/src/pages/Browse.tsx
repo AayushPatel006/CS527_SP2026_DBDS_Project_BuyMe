@@ -7,6 +7,10 @@ import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Search } from 'lucide-react';
 
+function isClosed(item: Item): boolean {
+  return item.status !== 'active' || new Date(item.closes_at) <= new Date();
+}
+
 export default function BrowsePage() {
   const [searchParams] = useSearchParams();
   const [items, setItems] = useState<Item[]>([]);
@@ -26,9 +30,16 @@ export default function BrowsePage() {
     api.items.list({
       search: search || undefined,
       category_id: categoryFilter !== 'all' ? Number(categoryFilter) : undefined,
-      status: statusFilter !== 'all' ? statusFilter : undefined,
     }).then(data => {
-      let sorted = [...data];
+      let filtered = data;
+
+      if (statusFilter === 'active') {
+        filtered = data.filter(item => !isClosed(item));
+      } else if (statusFilter === 'closed') {
+        filtered = data.filter(item => isClosed(item));
+      }
+
+      const sorted = [...filtered];
       switch (sortBy) {
         case 'ending-soon': sorted.sort((a, b) => new Date(a.closes_at).getTime() - new Date(b.closes_at).getTime()); break;
         case 'price-low': sorted.sort((a, b) => (a.current_bid || a.starting_price) - (b.current_bid || b.starting_price)); break;

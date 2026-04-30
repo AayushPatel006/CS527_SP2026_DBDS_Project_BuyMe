@@ -19,6 +19,7 @@ export const mockCategories: Category[] = [
   { id: 8, name: 'Pickup Trucks', parent_id: 3, level: 'leaf' },
   { id: 9, name: 'Cruisers', parent_id: 4, level: 'leaf' },
   { id: 10, name: 'Sport Bikes', parent_id: 4, level: 'leaf' },
+  { id: 11, name: 'Other', parent_id: null, level: 'leaf' },
 ];
 
 export const mockCategoryFields: CategoryField[] = [

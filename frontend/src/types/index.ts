@@ -80,6 +80,7 @@ export interface Question {
   user_id: number;
   item_id?: number;
   rep_id?: number;
+  item_title?: string;
   question_text: string;
   answer_text?: string;
   asked_at: string;
@@ -110,4 +111,16 @@ export interface SalesReport {
 export interface AuthState {
   user: User | null;
   isAuthenticated: boolean;
+}
+
+export interface AssistantBidPlan {
+  query: string;
+  strategy: string;
+  match_quality: 'exact' | 'closest';
+  explanation: string;
+  recommended_bid: number;
+  budget?: number;
+  min_year?: number;
+  categories: string[];
+  item: Item;
 }

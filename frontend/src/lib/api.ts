@@ -4,10 +4,10 @@
  * Base URL can be configured via environment variable.
  */
 
-import { mockUsers, mockItems, mockBids, mockCategories, mockCategoryFields, mockQuestions, mockNotifications } from './mock-data';
-import type { User, Item, Bid, Category, CategoryField, Question, Notification, Alert, AuthState } from '@/types';
+import { mockNotifications } from './mock-data';
+import type { User, Item, Bid, Category, CategoryField, Question, Notification, Alert, AuthState, AssistantBidPlan } from '@/types';
 
-// const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
+const API_BASE = import.meta.env.VITE_API_URL || '/api';
 
 // Simulated delay
 const delay = (ms = 300) => new Promise(r => setTimeout(r, ms));
@@ -17,20 +17,33 @@ let currentUser: User | null = null;
 
 export const api = {
   auth: {
-    async login(username: string, _password: string): Promise<User> {
-      await delay();
-      const user = mockUsers.find(u => u.username === username);
-      if (!user) throw new Error('Invalid credentials');
-      currentUser = user;
-      localStorage.setItem('buyme_user', JSON.stringify(user));
-      return user;
+    async login(username: string, password: string): Promise<User> {
+      const response = await fetch(`${API_BASE}/auth/login`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username, password }),
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        throw new Error(data?.error || 'Invalid credentials');
+      }
+      currentUser = data as User;
+      localStorage.setItem('buyme_user', JSON.stringify(currentUser));
+      return currentUser;
     },
-    async register(username: string, email: string, _password: string): Promise<User> {
-      await delay();
-      const user: User = { id: Date.now(), username, email, role: 'buyer', is_active: true, created_at: new Date().toISOString() };
-      currentUser = user;
-      localStorage.setItem('buyme_user', JSON.stringify(user));
-      return user;
+    async register(username: string, email: string, password: string, role: 'buyer' | 'seller' = 'buyer'): Promise<User> {
+      const response = await fetch(`${API_BASE}/auth/register`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username, email, password, role }),
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        throw new Error(data?.error || 'Registration failed');
+      }
+      currentUser = data as User;
+      localStorage.setItem('buyme_user', JSON.stringify(currentUser));
+      return currentUser;
     },
     async logout(): Promise<void> {
       currentUser = null;
@@ -47,124 +60,248 @@ export const api = {
 
   items: {
     async list(filters?: { category_id?: number; search?: string; status?: string }): Promise<Item[]> {
-      await delay();
-      let items = [...mockItems];
-      if (filters?.category_id) items = items.filter(i => i.category_id === filters.category_id);
-      if (filters?.status) items = items.filter(i => i.status === filters.status);
-      if (filters?.search) {
-        const q = filters.search.toLowerCase();
-        items = items.filter(i => i.title.toLowerCase().includes(q) || i.description.toLowerCase().includes(q));
+      const params = new URLSearchParams();
+      if (filters?.category_id) params.set('category_id', String(filters.category_id));
+      if (filters?.search) params.set('search', filters.search);
+      if (filters?.status) params.set('status', filters.status);
+
+      const query = params.toString();
+      const response = await fetch(`${API_BASE}/items${query ? `?${query}` : ''}`);
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data?.error || 'Failed to load items');
       }
-      return items;
+
+      return data as Item[];
     },
     async get(id: number): Promise<Item> {
-      await delay();
-      const item = mockItems.find(i => i.id === id);
-      if (!item) throw new Error('Item not found');
-      return item;
+      const response = await fetch(`${API_BASE}/item/${id}`);
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data?.error || 'Item not found');
+      }
+      return data as Item;
     },
     async create(data: Partial<Item>): Promise<Item> {
-      await delay();
-      const item: Item = { id: Date.now(), status: 'active', created_at: new Date().toISOString(), ...data } as Item;
-      return item;
+      const response = await fetch(`${API_BASE}/items`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data),
+      });
+      const result = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        throw new Error(result?.error || `Failed to create item (HTTP ${response.status})`);
+      }
+      return result as Item;
     },
   },
 
   bids: {
     async listByItem(itemId: number): Promise<Bid[]> {
-      await delay();
-      return mockBids.filter(b => b.item_id === itemId && !b.removed_at).sort((a, b) => b.amount - a.amount);
+      const response = await fetch(`${API_BASE}/item/${itemId}/bids`);
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data?.error || 'Failed to load bids');
+      }
+      return data as Bid[];
     },
-    async place(itemId: number, amount: number, autoBidLimit?: number): Promise<Bid> {
-      await delay();
-      const bid: Bid = {
-        id: Date.now(), item_id: itemId, bidder_id: currentUser?.id || 0,
-        amount, auto_bid_limit: autoBidLimit, is_auto: false,
-        placed_at: new Date().toISOString(), bidder_username: currentUser?.username,
-      };
-      return bid;
+    async place(itemId: number, amount: number, autoBidLimit?: number, isAuto = false): Promise<Bid> {
+      if (!currentUser?.id) {
+        throw new Error('You must be signed in to place a bid');
+      }
+
+      const response = await fetch(`${API_BASE}/item/${itemId}/bids`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          bidder_id: currentUser.id,
+          amount,
+          auto_bid_limit: autoBidLimit,
+          is_auto: isAuto,
+        }),
+      });
+
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        throw new Error(data?.error || `Failed to place bid (HTTP ${response.status})`);
+      }
+
+      return data as Bid;
     },
   },
 
   categories: {
     async list(): Promise<Category[]> {
-      await delay(100);
-      return mockCategories;
+      const response = await fetch(`${API_BASE}/categories`);
+      const data = await response.json().catch(() => []);
+      if (!response.ok) {
+        throw new Error(data?.error || 'Failed to load categories');
+      }
+      return data as Category[];
     },
     async getFields(categoryId: number): Promise<CategoryField[]> {
-      await delay(100);
-      // Return fields for this category and all parent categories
-      const cat = mockCategories.find(c => c.id === categoryId);
-      const ids = [categoryId];
-      if (cat?.parent_id) {
-        ids.push(cat.parent_id);
-        const parent = mockCategories.find(c => c.id === cat.parent_id);
-        if (parent?.parent_id) ids.push(parent.parent_id);
+      const response = await fetch(`${API_BASE}/categories/${categoryId}/fields`);
+      const data = await response.json().catch(() => []);
+      if (!response.ok) {
+        throw new Error(data?.error || 'Failed to load category fields');
       }
-      return mockCategoryFields.filter(f => ids.includes(f.category_id));
+      return data as CategoryField[];
+    },
+  },
+
+  home: {
+    async stats(): Promise<{ active_auctions: number; verified_sellers: number; vehicles_listed: number }> {
+      const response = await fetch(`${API_BASE}/stats/home`);
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        throw new Error(data?.error || 'Failed to load home stats');
+      }
+      return data as { active_auctions: number; verified_sellers: number; vehicles_listed: number };
+    },
+  },
+
+  assistant: {
+    async planBid(query: string): Promise<AssistantBidPlan> {
+      const response = await fetch(`${API_BASE}/assistant/bid-plan`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ query }),
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        throw new Error(data?.error || 'Failed to plan bid');
+      }
+      return data as AssistantBidPlan;
     },
   },
 
   questions: {
-    async list(): Promise<Question[]> {
-      await delay();
-      return mockQuestions;
+    async list(filters?: { user_id?: number; item_id?: number; unanswered?: boolean }): Promise<Question[]> {
+      const params = new URLSearchParams();
+      if (filters?.user_id) params.set('user_id', String(filters.user_id));
+      if (filters?.item_id) params.set('item_id', String(filters.item_id));
+      if (filters?.unanswered) params.set('unanswered', 'true');
+
+      const query = params.toString();
+      const response = await fetch(`${API_BASE}/questions${query ? `?${query}` : ''}`);
+      const data = await response.json().catch(() => []);
+      if (!response.ok) {
+        throw new Error(data?.error || 'Failed to load questions');
+      }
+      return data as Question[];
     },
     async ask(questionText: string, itemId?: number): Promise<Question> {
-      await delay();
-      return { id: Date.now(), user_id: currentUser?.id || 0, item_id: itemId, question_text: questionText, asked_at: new Date().toISOString(), user_username: currentUser?.username };
+      if (!currentUser?.id) {
+        throw new Error('You must be signed in to ask a question');
+      }
+
+      const response = await fetch(`${API_BASE}/questions`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          user_id: currentUser.id,
+          item_id: itemId,
+          question_text: questionText,
+        }),
+      });
+
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        throw new Error(data?.error || 'Failed to submit question');
+      }
+
+      return data as Question;
     },
     async answer(questionId: number, answerText: string): Promise<Question> {
-      await delay();
-      const q = mockQuestions.find(q => q.id === questionId);
-      if (!q) throw new Error('Question not found');
-      return { ...q, answer_text: answerText, rep_id: currentUser?.id, answered_at: new Date().toISOString() };
+      if (!currentUser?.id) {
+        throw new Error('You must be signed in to answer questions');
+      }
+
+      const response = await fetch(`${API_BASE}/questions/${questionId}/answer`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          rep_id: currentUser.id,
+          answer_text: answerText,
+        }),
+      });
+
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        throw new Error(data?.error || 'Failed to submit answer');
+      }
+
+      return data as Question;
     },
   },
 
   notifications: {
     async list(): Promise<Notification[]> {
-      await delay();
-      return currentUser ? mockNotifications.filter(n => n.user_id === currentUser!.id) : [];
+      if (!currentUser?.id) {
+        return [];
+      }
+
+      const response = await fetch(`${API_BASE}/notifications?user_id=${currentUser.id}`);
+      const data = await response.json().catch(() => []);
+      if (!response.ok) {
+        throw new Error(data?.error || 'Failed to load notifications');
+      }
+      return data as Notification[];
     },
-    async markRead(id: number): Promise<void> { await delay(100); },
+    async markRead(id: number): Promise<void> {
+      if (!currentUser?.id) {
+        throw new Error('You must be signed in');
+      }
+
+      const response = await fetch(`${API_BASE}/notifications/${id}/read`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ user_id: currentUser.id }),
+      });
+
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        throw new Error(data?.error || 'Failed to mark notification as read');
+      }
+    },
   },
 
   admin: {
     async createRep(username: string, email: string, password: string): Promise<User> {
-      await delay();
-      return { id: Date.now(), username, email, role: 'rep', is_active: true, created_at: new Date().toISOString() };
+      const response = await fetch(`${API_BASE}/admin/reps`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username, email, password }),
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        throw new Error(data?.error || 'Failed to create rep');
+      }
+      return data as User;
     },
     async getSalesReport() {
-      await delay();
-      return {
-        total_earnings: 134500,
-        earnings_by_item: [
-          { item_title: 'Harley-Davidson Road King', earnings: 17500 },
-          { item_title: 'Porsche 911 Carrera S', earnings: 92000 },
-        ],
-        earnings_by_type: [
-          { category_name: 'Sports Cars', earnings: 92000 },
-          { category_name: 'Cruisers', earnings: 17500 },
-          { category_name: 'SUVs', earnings: 25000 },
-        ],
-        earnings_by_user: [
-          { username: 'jane_buyer', earnings: 109500 },
-          { username: 'alice_buyer', earnings: 25000 },
-        ],
-        best_selling_items: [
-          { item_title: 'Porsche 911 Carrera S', sold_count: 1 },
-          { item_title: 'Harley-Davidson Road King', sold_count: 1 },
-        ],
-        best_buyers: [
-          { username: 'jane_buyer', total_spent: 109500 },
-          { username: 'alice_buyer', total_spent: 25000 },
-        ],
-      };
+      const response = await fetch(`${API_BASE}/admin/sales-report`);
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        throw new Error(data?.error || 'Failed to load sales report');
+      }
+      return data;
     },
     async listUsers(): Promise<User[]> {
-      await delay();
-      return mockUsers;
+      const response = await fetch(`${API_BASE}/admin/users`);
+      const data = await response.json().catch(() => []);
+      if (!response.ok) {
+        throw new Error(data?.error || 'Failed to load users');
+      }
+      return data as User[];
+    },
+    async getStats(): Promise<{ total_users: number; active_auctions: number; total_items: number; total_bids: number; sold_items: number }> {
+      const response = await fetch(`${API_BASE}/admin/stats`);
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        throw new Error(data?.error || 'Failed to load admin stats');
+      }
+      return data as { total_users: number; active_auctions: number; total_items: number; total_bids: number; sold_items: number };
     },
   },
 };
