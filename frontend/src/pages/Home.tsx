@@ -59,11 +59,21 @@ export default function HomePage() {
         <div className="container relative">
           <div className="grid items-start gap-10 lg:grid-cols-[minmax(0,1.1fr)_minmax(340px,0.9fr)] lg:gap-12">
             <div className="max-w-3xl">
+              <div className="mb-7 flex items-center gap-6">
+                <div className="flex h-36 w-36 items-center justify-center rounded-[2.4rem] border border-white/35 bg-white shadow-[0_28px_75px_rgba(15,23,42,0.26)] backdrop-blur-xl">
+                  <img src="/favicon.ico" alt="BuyMe" className="h-36 w-36 rounded-[1.75rem] object-contain" />
+                </div>
+                <div className="text-left">
+                  <p className="text-sm font-semibold  tracking-[0.24em] text-cyan-100/80">MotorAuctionX</p>
+                  <p className="text-base text-white/85">Smart vehicle auctions</p>
+                </div>
+              </div>
+
               <h1 className="font-heading text-4xl lg:text-6xl font-bold text-primary-foreground mb-4">
                 Find Your Next <span className="text-accent">Ride</span>
               </h1>
               <p className="text-lg text-primary-foreground/80 mb-8">
-                BuyMe is the trusted vehicle auction marketplace. Browse cars, trucks, and motorcycles — bid with confidence.
+                MotorAuctionX is the trusted vehicle auction marketplace. Browse cars, trucks, and motorcycles — bid with confidence.
               </p>
 
               <div className="flex gap-3">
